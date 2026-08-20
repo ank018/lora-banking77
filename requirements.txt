@@ -1,0 +1,11 @@
+# Local Windows box: authoring, splits, analysis, plots. CPU only.
+# Do NOT install GPU torch here - training happens on Kaggle.
+numpy>=1.26
+pandas>=2.2,<3
+scikit-learn>=1.5
+datasets>=2.19
+transformers>=4.44
+matplotlib>=3.8
+pyarrow>=16.0
+pytest>=8.0
+python-dotenv>=1.0

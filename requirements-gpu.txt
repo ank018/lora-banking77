@@ -1,0 +1,9 @@
+# Kaggle T4 image. Pin these in the notebook's first cell.
+# Turing (sm75) has no bf16 and no flash-attn-2: fp16 only.
+torch  # supplied by the Kaggle image - do not reinstall
+transformers>=4.44
+peft>=0.12
+trl>=0.9
+bitsandbytes>=0.43
+accelerate>=0.33
+datasets>=2.19
