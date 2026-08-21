@@ -26,7 +26,7 @@ import torch  # noqa: E402
 
 import prompts as P  # noqa: E402
 from inference import (  # noqa: E402
-    batched_generate, cache_strategy, load_model, render,
+    batched_generate, cache_strategy, diagnose_padding, load_model, render,
     score_labels_cached, verify_generation_equivalence,
     verify_scoring_equivalence,
 )
@@ -59,7 +59,21 @@ def main():
     for i, a, b in g["examples"]:
         print(f"    [{i}] batched={a.strip()[:40]!r}  single={b.strip()[:40]!r}")
     if g["mismatches"]:
-        print("  !! batching is not equivalent - do not trust any batched run")
+        print("  !! batching is not equivalent - diagnosing")
+
+    print("\n  first-token logits, batched vs unbatched")
+    print(f"    {'i':>2s} {'pads':>5s} {'max|dlogit|':>12s} {'top2 gap':>9s} "
+          f"{'flip':>5s}  verdict")
+    for r in diagnose_padding(model, tok, zs[:N_GEN_CHECK]):
+        if not r["flipped"]:
+            verdict = "-"
+        elif r["top2_gap"] < r["max_logit_delta"]:
+            verdict = "near-tie, arithmetic"
+        else:
+            verdict = "REAL BUG: gap exceeds noise"
+        print(f"    {r['i']:2d} {r['pad_tokens']:5d} "
+              f"{r['max_logit_delta']:12.4f} {r['top2_gap']:9.4f} "
+              f"{str(r['flipped']):>5s}  {verdict}")
 
     # ---------------------------------------------------------------- 2
     rule("2. cache-expansion strategy")

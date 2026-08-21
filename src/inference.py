@@ -120,12 +120,30 @@ def encode_labels(tok, labels):
 
 
 @torch.no_grad()
+def _token_logprobs(logits, targets):
+    """Log-probs of `targets` given `logits`, without a full-vocab copy.
+
+    log_softmax(x).gather(t) allocates another [B, T, V] tensor. At vocab
+    151,936 that is gigabytes for a handful of numbers. gather - logsumexp
+    computes the same thing with [B, T] intermediates.
+    """
+    lse = torch.logsumexp(logits.float(), dim=-1)
+    picked = logits.gather(2, targets.unsqueeze(-1)).squeeze(-1).float()
+    return picked - lse
+
+
+@torch.no_grad()
 def score_labels_naive(model, tok, prompt, labels, label_ids=None,
-                       batch_size=16):
+                       batch_size=8):
     """Reference implementation. Slow, obvious, assumed correct.
 
     Builds prompt+label for every label and scores the continuation. Used
     to validate the fast path and as a fallback if cache expansion fails.
+
+    Only the final `longest + 1` logit positions are ever needed, so they
+    are the only ones computed where transformers supports `logits_to_keep`.
+    Computing all of them and slicing afterwards is a multi-gigabyte
+    allocation for a dozen useful numbers.
     """
     label_ids = label_ids or encode_labels(tok, labels)
     p_ids = tok(prompt, return_tensors="pt").input_ids[0]
@@ -138,18 +156,27 @@ def score_labels_naive(model, tok, prompt, labels, label_ids=None,
         longest = max(len(c) for c in chunk)
         rows, masks, lens = [], [], []
         for c in chunk:
-            seq = p_ids.tolist() + c + [pad] * (longest - len(c))
-            rows.append(seq)
+            rows.append(p_ids.tolist() + c + [pad] * (longest - len(c)))
             masks.append([1] * (n_prompt + len(c)) + [0] * (longest - len(c)))
             lens.append(len(c))
         ids = torch.tensor(rows, device=model.device)
         att = torch.tensor(masks, device=model.device)
-        logits = model(ids, attention_mask=att).logits.float()
-        lp = torch.log_softmax(logits[:, :-1], dim=-1)
-        tgt = ids[:, 1:]
-        tok_lp = lp.gather(2, tgt.unsqueeze(-1)).squeeze(-1)
-        for r, n in enumerate(lens):
-            scores.append(tok_lp[r, n_prompt - 1:n_prompt - 1 + n].sum().item())
+
+        keep = longest + 1
+        try:
+            logits = model(ids, attention_mask=att,
+                           logits_to_keep=keep).logits
+            kept = logits[:, :-1]                      # positions n_prompt-1 ..
+        except TypeError:
+            logits = model(ids, attention_mask=att).logits
+            kept = logits[:, n_prompt - 1:n_prompt - 1 + longest]
+
+        tgt = ids[:, n_prompt:n_prompt + longest]
+        tok_lp = _token_logprobs(kept, tgt)
+        pos = torch.arange(longest, device=model.device).unsqueeze(0)
+        mask = pos < torch.tensor(lens, device=model.device).unsqueeze(1)
+        scores.extend((tok_lp * mask).sum(dim=1).tolist())
+        del logits, kept, tok_lp
     return scores
 
 
@@ -210,7 +237,8 @@ def score_labels_cached(model, tok, prompt, labels, label_ids=None):
     p_ids = tok(prompt, return_tensors="pt").input_ids.to(dev)
     n_prompt = p_ids.shape[1]
     out = model(p_ids, use_cache=True)
-    lp_first = torch.log_softmax(out.logits[:, -1, :].float(), dim=-1)[0]
+    last = out.logits[:, -1, :].float()
+    lp_first = (last - torch.logsumexp(last, dim=-1, keepdim=True))[0]
 
     longest = max(len(c) for c in label_ids)
     padded = torch.full((n, longest), pad, dtype=torch.long, device=dev)
@@ -226,10 +254,9 @@ def score_labels_cached(model, tok, prompt, labels, label_ids=None):
         att = torch.ones((n, n_prompt + feed.shape[1]), dtype=torch.long,
                          device=dev)
         logits = model(feed, attention_mask=att,
-                       past_key_values=cache).logits.float()
-        lp = torch.log_softmax(logits, dim=-1)
+                       past_key_values=cache).logits
         tgt = padded[:, 1:]
-        step_lp = lp.gather(2, tgt.unsqueeze(-1)).squeeze(-1)
+        step_lp = _token_logprobs(logits, tgt)
         pos = torch.arange(longest - 1, device=dev).unsqueeze(0)
         mask = pos < (lengths - 1).unsqueeze(1)
         totals = totals + (step_lp * mask).sum(dim=1)
@@ -295,3 +322,48 @@ def verify_scoring_equivalence(model, tok, prompt, labels, tol=0.05):
         "cached_s": t_cached,
         "speedup": t_naive / max(t_cached, 1e-9),
     }
+
+
+# ------------------------------------------------------------ diagnosis
+@torch.no_grad()
+def diagnose_padding(model, tok, prompts, dtype_note=""):
+    """Why do batched and unbatched greedy decodes differ?
+
+    Two candidate causes demand different responses:
+
+      position handling  a real bug; left padding must shift position ids
+                         so the first real token sits at position 0
+      fp16 accumulation  batching changes matmul shapes and therefore
+                         reduction order; a near-tie between two labels
+                         can flip. Not fixable, but measurable - and it
+                         makes batch size a nuisance parameter that must
+                         be pinned and recorded like a seed.
+
+    Reported per prompt: the largest logit disagreement at the first
+    generated position, whether the argmax flips, and the top-2 gap. A
+    flip on a large gap is a bug. A flip on a gap smaller than the logit
+    delta is arithmetic.
+    """
+    side = tok.padding_side
+    tok.padding_side = "left"
+    try:
+        batch = tok(prompts, return_tensors="pt", padding=True).to(model.device)
+        blogits = model(**batch).logits[:, -1, :].float()
+        rows = []
+        for i, p in enumerate(prompts):
+            single = tok(p, return_tensors="pt").to(model.device)
+            slogits = model(**single).logits[:, -1, :].float()[0]
+            b = blogits[i]
+            top2 = torch.topk(slogits, 2).values
+            rows.append({
+                "i": i,
+                "pad_tokens": int((batch.attention_mask[i] == 0).sum()),
+                "max_logit_delta": float((b - slogits).abs().max()),
+                "argmax_batched": int(b.argmax()),
+                "argmax_single": int(slogits.argmax()),
+                "flipped": int(b.argmax()) != int(slogits.argmax()),
+                "top2_gap": float(top2[0] - top2[1]),
+            })
+        return rows
+    finally:
+        tok.padding_side = side
