@@ -41,6 +41,9 @@ from evaluator import evaluate_constrained, evaluate_free_form, score  # noqa: E
 from runner import write_env  # noqa: E402
 
 SPLITS = Path("eval/splits")
+# Overridden by --runs-dir. On Kaggle the repo clone is destroyed with the
+# session, so results must be written to /kaggle/working to survive - a
+# multi-hour pass that vanishes at session end is worse than not running it.
 RUNS = Path("reports/runs")
 BATCH_SIZE = 32          # pinned: see docs/03_inference.md, batching noise
 RETRIEVAL_K = 10
@@ -68,6 +71,12 @@ def read_jsonl(path):
 
 def run_dir(config, regime):
     return RUNS / f"{config}__{regime}"
+
+
+def set_runs_dir(path):
+    global RUNS
+    RUNS = Path(path)
+    RUNS.mkdir(parents=True, exist_ok=True)
 
 
 def already_done(path):
@@ -213,7 +222,12 @@ def main():
                     help="smoke test on a shuffled subsample")
     ap.add_argument("--model", default="Qwen/Qwen3-1.7B")
     ap.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    ap.add_argument("--runs-dir", default=str(RUNS),
+                    help="on Kaggle use /kaggle/working/runs so results "
+                         "survive the session")
     args = ap.parse_args()
+    set_runs_dir(args.runs_dir)
+    print(f"runs dir: {RUNS.resolve()}")
 
     labels = P.load_labels()
     pool = P.load_pool()
