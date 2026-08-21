@@ -27,9 +27,11 @@ import torch  # noqa: E402
 import prompts as P  # noqa: E402
 from inference import (  # noqa: E402
     batched_generate, cache_strategy, diagnose_padding, load_model, render,
-    score_labels_cached, verify_generation_equivalence,
-    verify_scoring_equivalence,
+    score_labels_cached, scoring_self_consistency,
+    verify_generation_equivalence, verify_scoring_equivalence,
 )
+
+SUBSAMPLE_SEED = 20260821
 
 N_GEN_CHECK = 8
 N_TIMING = 64
@@ -43,8 +45,21 @@ def main():
     labels = P.load_labels()
     pool = P.load_pool()
     with open("eval/splits/test.jsonl", encoding="utf-8") as f:
-        test = [json.loads(line) for line in f]
-    print(f"labels {len(labels)}   test {len(test):,d}   pool {len(pool):,d}")
+        test_all = [json.loads(line) for line in f]
+
+    # test.jsonl inherits upstream ordering, which is grouped by class:
+    # test_all[:64] is a single intent. Any subsample must be shuffled or
+    # every timing and every sample output is one class deep.
+    import random
+    test = list(test_all)
+    random.Random(SUBSAMPLE_SEED).shuffle(test)
+    print(f"labels {len(labels)}   test {len(test_all):,d}   "
+          f"pool {len(pool):,d}")
+    print(f"  first 8 gold labels unshuffled: "
+          f"{len({r['label'] for r in test_all[:8]})} distinct")
+    print(f"  first 8 gold labels shuffled:   "
+          f"{len({r['label'] for r in test[:8]})} distinct "
+          f"(seed {SUBSAMPLE_SEED})")
 
     model, tok = load_model()
     print(f"loaded {model.__class__.__name__} on {model.device}, "
@@ -74,6 +89,12 @@ def main():
         print(f"    {r['i']:2d} {r['pad_tokens']:5d} "
               f"{r['max_logit_delta']:12.4f} {r['top2_gap']:9.4f} "
               f"{str(r['flipped']):>5s}  {verdict}")
+    risky = [r for r in diagnose_padding(model, tok, zs[:N_GEN_CHECK])
+             if r["at_risk"]]
+    print(f"\n    at risk (top-2 margin inside batching noise): "
+          f"{len(risky)}/{N_GEN_CHECK}")
+    print("    Those items are decided by fp16 reduction order, not by the")
+    print("    model. Batch size is a pinned, recorded parameter from here.")
 
     # ---------------------------------------------------------------- 2
     rule("2. cache-expansion strategy")
@@ -82,6 +103,16 @@ def main():
 
     # ---------------------------------------------------------------- 3
     rule("3. cached vs naive label scoring")
+    print("  first: is the reference self-consistent across batch sizes?")
+    for i in range(2):
+        s = scoring_self_consistency(model, tok, zs[i], labels)
+        deltas = {k: v for k, v in s.items() if k.startswith("max_delta")}
+        print(f"    item {i}  " + "  ".join(f"{k.split('_at_')[-1]}:{v:.4f}"
+                                            for k, v in deltas.items())
+              + f"   argmax_stable={s['argmax_stable']}")
+    print("    If these deltas match the cached-vs-naive deltas below, the")
+    print("    difference is fp16 arithmetic and there is no bug to fix.\n")
+
     for i in range(3):
         v = verify_scoring_equivalence(model, tok, zs[i], labels)
         print(f"  item {i}  max|delta| {v['max_abs_delta']:.4f}  "

@@ -294,6 +294,34 @@ def verify_generation_equivalence(model, tok, prompts, max_new_tokens=16,
             "examples": diffs[:3]}
 
 
+def scoring_self_consistency(model, tok, prompt, labels, sizes=(4, 8, 16)):
+    """Does the reference implementation agree with itself?
+
+    score_labels_naive is only a reference if it is deterministic. Changing
+    its batch size changes matmul shapes and therefore fp16 reduction
+    order, exactly as it does for generation. If naive disagrees with
+    itself by the same magnitude that cached disagrees with naive, then the
+    disagreement is arithmetic and there is no bug to find. If naive is
+    self-consistent to ~1e-4 and only cached deviates, the cache handling
+    is wrong.
+
+    This is the decisive test, and it has to come before any
+    cached-vs-naive comparison is interpreted.
+    """
+    ids = encode_labels(tok, labels)
+    runs = {n: score_labels_naive(model, tok, prompt, labels, ids,
+                                  batch_size=n) for n in sizes}
+    base = runs[sizes[0]]
+    out = {"sizes": list(sizes), "argmax_by_size": {}}
+    for n, vals in runs.items():
+        deltas = [abs(a - b) for a, b in zip(base, vals)]
+        out[f"max_delta_vs_{sizes[0]}_at_{n}"] = max(deltas)
+        out["argmax_by_size"][n] = labels[vals.index(max(vals))]
+    out["argmax_stable"] = len(set(out["argmax_by_size"].values())) == 1
+    return out
+
+
+@torch.no_grad()
 def verify_scoring_equivalence(model, tok, prompt, labels, tol=0.05):
     """Cached scores must match naive scores, and rank identically.
 
@@ -355,14 +383,20 @@ def diagnose_padding(model, tok, prompts, dtype_note=""):
             slogits = model(**single).logits[:, -1, :].float()[0]
             b = blogits[i]
             top2 = torch.topk(slogits, 2).values
+            delta = float((b - slogits).abs().max())
+            gap = float(top2[0] - top2[1])
             rows.append({
                 "i": i,
                 "pad_tokens": int((batch.attention_mask[i] == 0).sum()),
-                "max_logit_delta": float((b - slogits).abs().max()),
+                "max_logit_delta": delta,
                 "argmax_batched": int(b.argmax()),
                 "argmax_single": int(slogits.argmax()),
                 "flipped": int(b.argmax()) != int(slogits.argmax()),
-                "top2_gap": float(top2[0] - top2[1]),
+                "top2_gap": gap,
+                # The item is decided by arithmetic, not by the model,
+                # whenever the margin is inside the batching noise -
+                # whether or not this particular run happened to flip.
+                "at_risk": gap < delta,
             })
         return rows
     finally:
