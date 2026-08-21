@@ -38,13 +38,24 @@ def _gpu():
         import torch
         if not torch.cuda.is_available():
             return {"available": False}
+        major, minor = torch.cuda.get_device_capability(0)
+        # torch.cuda.is_bf16_supported() counts software emulation and
+        # returns True on a Tesla T4, which has no bf16 tensor cores.
+        # Capability >= 8.0 (Ampere) is the real test. Both are recorded.
+        try:
+            no_emul = bool(torch.cuda.is_bf16_supported(
+                including_emulation=False))
+        except TypeError:
+            no_emul = None
         return {
             "available": True,
             "name": torch.cuda.get_device_name(0),
-            "capability": ".".join(map(str, torch.cuda.get_device_capability(0))),
+            "capability": f"{major}.{minor}",
             "count": torch.cuda.device_count(),
             "cuda": torch.version.cuda,
-            "bf16_supported": torch.cuda.is_bf16_supported(),
+            "bf16_native": major >= 8,
+            "bf16_api": bool(torch.cuda.is_bf16_supported()),
+            "bf16_api_no_emulation": no_emul,
             "vram_gb": round(
                 torch.cuda.get_device_properties(0).total_memory / 1024**3, 1
             ),
@@ -100,9 +111,13 @@ def write_env(run_dir):
     gpu = manifest["gpu"]
     if gpu.get("available"):
         print(f"  GPU  {gpu['name']}  sm{gpu['capability'].replace('.', '')}  "
-              f"{gpu['vram_gb']}GB  cuda {gpu['cuda']}  bf16={gpu['bf16_supported']}")
-        if not gpu["bf16_supported"]:
-            print("  NOTE bf16 unsupported on this card - fp16 path required")
+              f"{gpu['vram_gb']}GB  cuda {gpu['cuda']}  "
+              f"bf16_native={gpu['bf16_native']}")
+        if not gpu["bf16_native"]:
+            print("  NOTE no native bf16 on this card - fp16 path required")
+            if gpu["bf16_api"]:
+                print("       (torch.cuda.is_bf16_supported() reports True via "
+                      "emulation; ignore it)")
     else:
         print("  GPU  none")
     return manifest

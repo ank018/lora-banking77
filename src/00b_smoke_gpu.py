@@ -52,6 +52,28 @@ def gb(x):
     return f"{x / 1024 ** 3:.2f} GB"
 
 
+def bf16_support():
+    """Native bf16, not what the convenience API reports.
+
+    torch.cuda.is_bf16_supported() returns True on a Tesla T4 (sm75), which
+    has no bf16 tensor cores - it is counting software emulation. Trusting
+    it means setting bf16=True on Turing and losing a day to a slow run
+    with no error. Compute capability >= 8.0 (Ampere) is the real test, and
+    both values are recorded so the discrepancy is visible rather than
+    resolved silently.
+    """
+    major, minor = torch.cuda.get_device_capability(0)
+    out = {"capability": f"{major}.{minor}",
+           "native": major >= 8,
+           "api": bool(torch.cuda.is_bf16_supported())}
+    try:  # keyword added in torch 2.4; absent on older builds
+        out["api_no_emulation"] = bool(
+            torch.cuda.is_bf16_supported(including_emulation=False))
+    except TypeError:
+        out["api_no_emulation"] = None
+    return out
+
+
 # ------------------------------------------------------------------ env
 def report_environment():
     rule("environment")
@@ -70,17 +92,22 @@ def report_environment():
 
     props = torch.cuda.get_device_properties(0)
     cap = torch.cuda.get_device_capability(0)
-    bf16 = torch.cuda.is_bf16_supported()
+    bf16 = bf16_support()
     print(f"\n  device         {props.name}")
     print(f"  count          {torch.cuda.device_count()}")
     print(f"  capability     sm{cap[0]}{cap[1]}")
     print(f"  vram           {gb(props.total_memory)}")
     print(f"  cuda           {torch.version.cuda}")
-    print(f"  bf16 supported {bf16}")
-    if not bf16:
-        print("\n  NOTE Turing (sm75) has no bf16 and no flash-attn-2.")
+    print(f"  bf16 native    {bf16['native']}   (compute capability >= 8.0)")
+    print(f"  bf16 api says  {bf16['api']}      (torch.cuda.is_bf16_supported)")
+    if bf16["api_no_emulation"] is not None:
+        print(f"  bf16 no-emul   {bf16['api_no_emulation']}")
+    if bf16["api"] and not bf16["native"]:
+        print("\n  NOTE the API reports True via software emulation. This card")
+        print("       has no bf16 tensor cores; using bf16 would run, slowly.")
+    if not bf16["native"]:
         print("       Every training config in this project must use fp16.")
-    return {"device": props.name, "bf16": bf16, "vram": props.total_memory}
+    return {"device": props.name, **bf16, "vram": props.total_memory}
 
 
 # ------------------------------------------------------------- inspect
