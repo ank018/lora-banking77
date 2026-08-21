@@ -1,0 +1,4 @@
+﻿* text=auto eol=lf
+*.jsonl -text
+*.json -text
+*.csv -text

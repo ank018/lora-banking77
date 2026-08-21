@@ -7,3 +7,4 @@ artifacts/adapters/*
 *.safetensors
 *.bin
 .ipynb_checkpoints/
+data/raw/

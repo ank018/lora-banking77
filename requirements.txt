@@ -3,8 +3,8 @@
 numpy>=1.26
 pandas>=2.2,<3
 scikit-learn>=1.5
-datasets>=2.19
-transformers>=4.44
+datasets>=5.0,<6
+transformers>=5.15,<6
 matplotlib>=3.8
 pyarrow>=16.0
 pytest>=8.0
