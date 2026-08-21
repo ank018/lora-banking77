@@ -69,8 +69,15 @@ def read_jsonl(path):
         return [json.loads(line) for line in f]
 
 
-def run_dir(config, regime):
-    return RUNS / f"{config}__{regime}"
+def run_dir(config, regime, limit=None):
+    """Limited runs get their own directory.
+
+    A --limit run draws a shuffled subsample; a full run walks test order.
+    Sharing a directory would let the full run resume on top of rows that
+    correspond to different items - no error, silently mismatched output.
+    """
+    suffix = f"__limit{limit}" if limit else ""
+    return RUNS / f"{config}__{regime}{suffix}"
 
 
 def set_runs_dir(path):
@@ -261,7 +268,7 @@ def main():
         rule(name)
 
         if cfg["kind"] == "majority":
-            d = run_dir(name, "constrained")
+            d = run_dir(name, "constrained", args.limit)
             d.mkdir(parents=True, exist_ok=True)
             recs = run_majority(test, pool, labels)
             with open(d / "predictions.jsonl", "w", encoding="utf-8",
@@ -276,7 +283,7 @@ def main():
         print(f"  prompt tokens: {len(tok(texts[0]).input_ids)}")
 
         for regime in args.regimes:
-            d = run_dir(name, regime)
+            d = run_dir(name, regime, args.limit)
             d.mkdir(parents=True, exist_ok=True)
             write_env(d)
             (d / "meta.json").write_text(json.dumps({
