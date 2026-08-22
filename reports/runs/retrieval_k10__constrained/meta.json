@@ -3,6 +3,8 @@
   "regime": "constrained",
   "model": "Qwen/Qwen3-1.7B",
   "batch_size": 32,
+  "label_chunk": 47,
+  "prompt_tokens": 728,
   "n_items": 3080,
   "limit": null,
   "prompt_versions": {

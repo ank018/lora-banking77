@@ -2,7 +2,9 @@
   "config": "few_shot_k77",
   "regime": "free_form",
   "model": "Qwen/Qwen3-1.7B",
-  "batch_size": 32,
+  "batch_size": 18,
+  "label_chunk": 16,
+  "prompt_tokens": 2127,
   "n_items": 3080,
   "limit": null,
   "prompt_versions": {
