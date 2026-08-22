@@ -108,6 +108,9 @@ def retrieval(query, labels, retrieved, order="alpha", seed=None):
 
 # --------------------------------------------------------- exemplar choice
 def fixed_exemplars(pool, k, seed=20260821):
+    # seed selects WHICH examples are shown, not how many. Varying it with
+    # k held constant separates "few-shot hurts" from "this particular
+    # draw of examples hurts" - one draw cannot tell them apart.
     """k exemplars, identical for every test item, spread across classes.
 
     Drawn from train_pool only - dev and test are never shown to a model in

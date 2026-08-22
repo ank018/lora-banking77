@@ -60,6 +60,12 @@ CONFIGS = {
     "zero_shot":     {"kind": "prompt", "template": "zero_shot"},
     "few_shot_k5":   {"kind": "prompt", "template": "few_shot", "k": 5},
     "few_shot_k20":  {"kind": "prompt", "template": "few_shot", "k": 20},
+    # Same k, different draws. Separates "exemplars hurt" from "this draw
+    # of exemplars hurts", which one seed cannot distinguish.
+    "few_shot_k20_s2": {"kind": "prompt", "template": "few_shot", "k": 20,
+                        "seed": 20260822},
+    "few_shot_k20_s3": {"kind": "prompt", "template": "few_shot", "k": 20,
+                        "seed": 20260823},
     "few_shot_k77":  {"kind": "prompt", "template": "few_shot", "k": 77},
     "retrieval_k10": {"kind": "prompt", "template": "retrieval",
                       "k": RETRIEVAL_K},
@@ -133,11 +139,12 @@ def build_retriever(pool):
 
 # ----------------------------------------------------------------- prompts
 def build_prompts(cfg, rows, labels, pool, tok, render):
+    """cfg may carry a 'seed' overriding which exemplars are drawn."""
     tmpl = cfg["template"]
     if tmpl == "zero_shot":
         msgs = [P.zero_shot(r["text"], labels) for r in rows]
     elif tmpl == "few_shot":
-        ex = P.fixed_exemplars(pool, cfg["k"])
+        ex = P.fixed_exemplars(pool, cfg["k"], seed=cfg.get("seed", 20260821))
         msgs = [P.few_shot(r["text"], labels, ex) for r in rows]
     elif tmpl == "retrieval":
         retrieve = build_retriever(pool)
