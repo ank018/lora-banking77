@@ -33,7 +33,14 @@ from evaluator import evaluate_constrained, score  # noqa: E402
 
 SPLITS = Path("eval/splits")
 RUNS = Path("reports/runs")
-NEIGHBOURS = [1, 3, 5, 10]
+NEIGHBOURS = [1, 3, 5, 10, 20]
+
+# k is chosen on dev, never on test. The first version of this script ran
+# every k on test and quoted the best - that is tuning on the test set,
+# and it inflates the headline by however much the best-of-N selection is
+# worth. Test scores for all k are still printed, because hiding them
+# would be its own kind of dishonesty, but the reported figure is the k
+# that dev picked.
 
 
 def read_jsonl(path):
@@ -81,10 +88,20 @@ def main():
 
     pool = read_jsonl(SPLITS / "train_pool.jsonl")
     test = read_jsonl(SPLITS / "test.jsonl")
+    dev = read_jsonl(SPLITS / "dev.jsonl")
     labels = sorted({r["label"] for r in pool})
     clean = clean_ids()
     print(f"pool {len(pool):,d}   test {len(test):,d}   "
           f"clean {len(clean):,d}   labels {len(labels)}")
+
+    print(f"\n  selecting k on dev ({len(dev):,d} items), test untouched")
+    dev_acc = {}
+    for k in NEIGHBOURS:
+        preds, _ = predict(pool, dev, k)
+        dev_acc[k] = sum(p == r["label"] for p, r in zip(preds, dev)) / len(dev)
+        print(f"    k={k:<3d} dev {dev_acc[k] * 100:5.1f}%")
+    best_k = max(sorted(dev_acc), key=lambda k: dev_acc[k])
+    print(f"    -> k={best_k} selected on dev")
 
     print(f"\n  {'config':12s} {'acc':>8s} {'clean':>8s}   "
           f"(no model, no GPU)")
@@ -108,8 +125,20 @@ def main():
 
         s, c = score(recs), score(recs, subset_ids=clean)
         results[k] = (s, c)
+        mark = "  <- selected on dev" if k == best_k else ""
         print(f"  knn_k{k:<7d} {s['accuracy'] * 100:7.1f}% "
-              f"{c['accuracy'] * 100:7.1f}%")
+              f"{c['accuracy'] * 100:7.1f}%{mark}")
+
+    import math
+    s = results[best_k][0]
+    half = 1.96 * math.sqrt(s["accuracy"] * (1 - s["accuracy"]) / s["n"]) * 100
+    print(f"\n  REPORTED: knn_k{best_k}  {s['accuracy'] * 100:.1f}% "
+          f"+/- {half:.1f} pp (95% CI, n={s['n']:,d})")
+    spread = (max(r[0]["accuracy"] for r in results.values())
+              - min(r[0]["accuracy"] for r in results.values())) * 100
+    print(f"  best-of-{len(NEIGHBOURS)} on test would have been "
+          f"{max(r[0]['accuracy'] for r in results.values()) * 100:.1f}% "
+          f"(spread across k: {spread:.1f} pp)")
 
     # How much of retrieval_k10's answer is just the top neighbour's label?
     rk = runs / "retrieval_k10__free_form" / "predictions.jsonl"

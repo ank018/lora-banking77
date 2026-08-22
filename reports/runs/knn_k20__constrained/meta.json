@@ -1,0 +1,6 @@
+{
+  "config": "knn_k20",
+  "regime": "constrained",
+  "model": "tfidf char_wb 3-5 + kNN",
+  "n_items": 3080
+}
