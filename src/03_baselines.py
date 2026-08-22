@@ -30,9 +30,15 @@ What is stored per item, and why:
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+
+# Must be set before torch initialises CUDA. Long-prompt configs allocate
+# and free multi-gigabyte caches per item; without expandable segments the
+# allocator fragments and OOMs with gigabytes nominally free.
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -152,6 +158,7 @@ def run_majority(rows, pool, labels):
 
 
 def run_free_form(model, tok, texts, rows, labels, out_path, batch_size):
+    """batch_size is the ceiling; the caller lowers it for long prompts."""
     from inference import batched_generate
     done = already_done(out_path)
     if done >= len(rows):
@@ -176,7 +183,7 @@ def run_free_form(model, tok, texts, rows, labels, out_path, batch_size):
     return read_jsonl(out_path)
 
 
-def run_constrained(model, tok, texts, rows, labels, out_path):
+def run_constrained(model, tok, texts, rows, labels, out_path, chunk=None):
     from inference import encode_labels, score_labels_cached
     done = already_done(out_path)
     if done >= len(rows):
@@ -189,7 +196,7 @@ def run_constrained(model, tok, texts, rows, labels, out_path):
     with open(out_path, "a", encoding="utf-8", newline="\n") as f:
         for i in range(done, len(rows)):
             scores = score_labels_cached(model, tok, texts[i], labels,
-                                         label_ids)
+                                         label_ids, chunk_size=chunk)
             order = sorted(range(len(labels)), key=lambda j: -scores[j])
             pred = labels[order[0]]
             rec = evaluate_constrained(pred, rows[i]["label"], labels)
@@ -202,6 +209,11 @@ def run_constrained(model, tok, texts, rows, labels, out_path):
             f.write(json.dumps(rec, ensure_ascii=False, sort_keys=True) + "\n")
             if (i + 1) % CHECKPOINT_EVERY == 0:
                 f.flush()
+                # Long-prompt configs churn multi-GB caches; release
+                # cached blocks periodically so fragmentation does not
+                # accumulate over thousands of items.
+                import torch
+                torch.cuda.empty_cache()
                 rate = (i + 1 - done) / (time.time() - t0)
                 eta = (len(rows) - i - 1) / max(rate, 1e-9) / 60
                 print(f"    {i + 1}/{len(rows)}  {rate:.1f} items/s  "
@@ -280,7 +292,12 @@ def main():
             continue
 
         texts = build_prompts(cfg, test, labels, pool, tok, render)
-        print(f"  prompt tokens: {len(tok(texts[0]).input_ids)}")
+        n_tok = max(len(tok(t).input_ids) for t in texts[:64])
+        from inference import plan_generation_batch, plan_label_chunk
+        gen_batch = min(args.batch_size, plan_generation_batch(n_tok))
+        chunk = plan_label_chunk(n_tok, len(labels))
+        print(f"  prompt tokens: {n_tok}   generation batch {gen_batch}   "
+              f"label chunk {chunk}")
 
         for regime in args.regimes:
             d = run_dir(name, regime, args.limit)
@@ -288,7 +305,8 @@ def main():
             write_env(d)
             (d / "meta.json").write_text(json.dumps({
                 "config": name, "regime": regime, "model": args.model,
-                "batch_size": args.batch_size, "n_items": len(test),
+                "batch_size": gen_batch, "label_chunk": chunk,
+                "prompt_tokens": n_tok, "n_items": len(test),
                 "limit": args.limit,
                 "prompt_versions": P.VERSIONS,
                 "splits_manifest_sha_core": manifest["sha256_core"],
@@ -297,9 +315,10 @@ def main():
             out = d / "predictions.jsonl"
             if regime == "free_form":
                 recs = run_free_form(model, tok, texts, test, labels, out,
-                                     args.batch_size)
+                                     gen_batch)
             else:
-                recs = run_constrained(model, tok, texts, test, labels, out)
+                recs = run_constrained(model, tok, texts, test, labels, out,
+                                       chunk)
             results[(name, regime)] = summarise(name, regime, recs, clean_ids)
 
     rule("summary")

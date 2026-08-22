@@ -32,6 +32,31 @@ import torch
 
 DEFAULT_MODEL = "Qwen/Qwen3-1.7B"
 
+# Memory scales with prompt_tokens x batch, and it was measured only at
+# 447-token prompts. Extrapolating throughput by token count is valid;
+# extrapolating memory that way is not, and doing so cost an overnight run.
+#
+# Observed on a 14.56 GB T4 with Qwen3-1.7B at fp16:
+#   generation   32 x  915 tokens  ok        32 x 2111  OOM
+#   scoring      77 x  447 tokens  ok        77 x  613  OOM (at item 203)
+#
+# The budgets below sit inside the observed-good region and are chosen so
+# that every already-completed run keeps its exact batch/chunk size - a
+# different batch size is a different measurement (see the batching-noise
+# section of docs/03_inference.md), so a "fix" that silently rescales
+# completed configs would invalidate them.
+GEN_TOKEN_BUDGET = 40_000     # batch x prompt_tokens, generation
+SCORE_TOKEN_BUDGET = 34_500   # chunk x prompt_tokens, label scoring
+MAX_GEN_BATCH = 32            # pinned; never exceed, only reduce
+
+
+def plan_generation_batch(prompt_tokens, cap=MAX_GEN_BATCH):
+    return max(1, min(cap, GEN_TOKEN_BUDGET // max(prompt_tokens, 1)))
+
+
+def plan_label_chunk(prompt_tokens, n_labels):
+    return max(1, min(n_labels, SCORE_TOKEN_BUDGET // max(prompt_tokens, 1)))
+
 
 # ------------------------------------------------------------------ setup
 def load_model(model_id=DEFAULT_MODEL, adapter_path=None, dtype=torch.float16):
@@ -186,12 +211,18 @@ def _expand_cache(past, n):
     Raises if no strategy works, so the caller can fall back rather than
     proceeding with a cache of the wrong shape.
     """
+    # An OOM here must propagate. Catching it and trying the next strategy
+    # turns "out of memory" into "no working cache-expansion strategy",
+    # which sends the reader looking for an API problem that does not
+    # exist. That happened, and it cost a debugging cycle.
     if hasattr(past, "batch_repeat_interleave"):
         try:
             import copy
             c = copy.deepcopy(past)
             c.batch_repeat_interleave(n)
             return c, "batch_repeat_interleave"
+        except torch.OutOfMemoryError:
+            raise
         except Exception:  # noqa: BLE001
             pass
 
@@ -202,6 +233,8 @@ def _expand_cache(past, n):
             grown = tuple(tuple(t.expand(n, *t.shape[1:]).contiguous()
                                 for t in layer) for layer in legacy)
             return type(past).from_legacy_cache(grown), "legacy_cache"
+        except torch.OutOfMemoryError:
+            raise
         except Exception:  # noqa: BLE001
             pass
 
@@ -215,6 +248,8 @@ def _expand_cache(past, n):
                 layer.values = layer.values.expand(
                     n, *layer.values.shape[1:]).contiguous()
             return c, "layers"
+        except torch.OutOfMemoryError:
+            raise
         except Exception:  # noqa: BLE001
             pass
 
@@ -222,12 +257,17 @@ def _expand_cache(past, n):
 
 
 @torch.no_grad()
-def score_labels_cached(model, tok, prompt, labels, label_ids=None):
+def score_labels_cached(model, tok, prompt, labels, label_ids=None,
+                        chunk_size=None):
     """Score every label against one shared prompt KV cache.
 
-    The prompt is encoded once. The first label token's log-prob comes from
-    the prompt's final logits; the rest come from a single forward over the
-    label tokens with the expanded cache.
+    The prompt is encoded once. The first label token's log-probability
+    comes from the prompt's final logits; the rest from a forward over the
+    label tokens with the cache expanded to the chunk width.
+
+    Labels are scored in chunks because the expanded cache costs
+    chunk x prompt_tokens, and at 77 x 2111 that alone exceeds the card.
+    chunk_size=None derives a safe width from the prompt length.
     """
     label_ids = label_ids or encode_labels(tok, labels)
     n = len(label_ids)
@@ -240,28 +280,36 @@ def score_labels_cached(model, tok, prompt, labels, label_ids=None):
     last = out.logits[:, -1, :].float()
     lp_first = (last - torch.logsumexp(last, dim=-1, keepdim=True))[0]
 
-    longest = max(len(c) for c in label_ids)
-    padded = torch.full((n, longest), pad, dtype=torch.long, device=dev)
-    lengths = torch.tensor([len(c) for c in label_ids], device=dev)
-    for r, c in enumerate(label_ids):
-        padded[r, :len(c)] = torch.tensor(c, device=dev)
+    if chunk_size is None:
+        chunk_size = plan_label_chunk(n_prompt, n)
 
-    totals = lp_first[padded[:, 0]].clone()
+    totals = []
+    for s in range(0, n, chunk_size):
+        chunk = label_ids[s:s + chunk_size]
+        m = len(chunk)
+        longest = max(len(c) for c in chunk)
+        padded = torch.full((m, longest), pad, dtype=torch.long, device=dev)
+        lengths = torch.tensor([len(c) for c in chunk], device=dev)
+        for r, c in enumerate(chunk):
+            padded[r, :len(c)] = torch.tensor(c, device=dev)
 
-    if longest > 1:
-        cache, _ = _expand_cache(out.past_key_values, n)
-        feed = padded[:, :-1]
-        att = torch.ones((n, n_prompt + feed.shape[1]), dtype=torch.long,
-                         device=dev)
-        logits = model(feed, attention_mask=att,
-                       past_key_values=cache).logits
-        tgt = padded[:, 1:]
-        step_lp = _token_logprobs(logits, tgt)
-        pos = torch.arange(longest - 1, device=dev).unsqueeze(0)
-        mask = pos < (lengths - 1).unsqueeze(1)
-        totals = totals + (step_lp * mask).sum(dim=1)
+        sub = lp_first[padded[:, 0]].clone()
+        if longest > 1:
+            cache, _ = _expand_cache(out.past_key_values, m)
+            feed = padded[:, :-1]
+            att = torch.ones((m, n_prompt + feed.shape[1]), dtype=torch.long,
+                             device=dev)
+            logits = model(feed, attention_mask=att,
+                           past_key_values=cache).logits
+            step_lp = _token_logprobs(logits, padded[:, 1:])
+            pos = torch.arange(longest - 1, device=dev).unsqueeze(0)
+            mask = pos < (lengths - 1).unsqueeze(1)
+            sub = sub + (step_lp * mask).sum(dim=1)
+            del cache, logits, step_lp
+        totals.extend(sub.tolist())
 
-    return totals.tolist()
+    del out
+    return totals
 
 
 def cache_strategy(model, tok, prompt, labels):
