@@ -1,0 +1,16 @@
+{
+  "config": "deberta_rung04_seed1",
+  "regime": "constrained",
+  "model": "microsoft/deberta-v3-base",
+  "rung_per_class": 4,
+  "n_train": 308,
+  "seed": 1,
+  "lr": 2e-05,
+  "epochs": 20,
+  "batch": 16,
+  "max_len": 64,
+  "best_epoch": 0,
+  "dev_acc": 0.012987012987012988,
+  "train_seconds": 57,
+  "n_items": 3080
+}
