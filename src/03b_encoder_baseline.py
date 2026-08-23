@@ -94,6 +94,16 @@ def clean_ids():
 
 
 def load_rung(k, pool_by_id):
+    """k examples per class, or the entire pool when k == 0.
+
+    The full-pool point is not another rung on the balanced curve: it is
+    9,387 examples at the natural class distribution (27 to 179 per class,
+    5.3x imbalance), so it varies size AND balance at once. Reported
+    separately for that reason - it answers "what if you use everything"
+    rather than extending the controlled scaling curve.
+    """
+    if k == 0:
+        return list(pool_by_id.values())
     ids = json.loads((SPLITS / "rungs" / f"rung_{k:02d}.json")
                      .read_text(encoding="utf-8"))
     return [pool_by_id[i] for i in ids]
@@ -210,9 +220,11 @@ def main():
     ap.add_argument("--rungs", nargs="*", type=int, default=RUNGS)
     ap.add_argument("--seeds", nargs="*", type=int, default=SEEDS)
     ap.add_argument("--model", default=MODEL, dest="model_id")
+    ap.add_argument("--epochs", type=int, default=EPOCHS)
     args = ap.parse_args()
     runs = Path(args.runs_dir)
     globals()["MODEL"] = args.model_id
+    globals()["EPOCHS"] = args.epochs
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     pool = read_jsonl(SPLITS / "train_pool.jsonl")
@@ -232,7 +244,8 @@ def main():
         rung = load_rung(k, pool_by_id)
         for seed in args.seeds:
             tag = MODEL.split("/")[-1].replace("-", "")
-            name = f"{tag}_rung{k:02d}_seed{seed}"
+            label = "full" if k == 0 else f"{k:02d}"
+            name = f"{tag}_rung{label}_seed{seed}"
             d = runs / f"{name}__constrained"
             if (d / "predictions.jsonl").exists():
                 recs = read_jsonl(d / "predictions.jsonl")
@@ -243,6 +256,8 @@ def main():
                                 None, None))
                 continue
 
+            print(f"  {name}  n_train={len(rung):,d}  "
+                  f"epochs={EPOCHS}", flush=True)
             t0 = time.time()
             model, tok, info = train_one(rung, dev, labels, seed, device)
             train_s = time.time() - t0
@@ -293,8 +308,9 @@ def main():
             continue
         sd = float(np.std(vals, ddof=1)) * 100 if len(vals) > 1 else float("nan")
         rng = (max(vals) - min(vals)) * 100 if len(vals) > 1 else float("nan")
-        n_train = sum(1 for _ in load_rung(k, pool_by_id))
-        print(f"  {k:9d} {n_train:8,d} {np.mean(vals) * 100:7.1f}% "
+        n_train = len(load_rung(k, pool_by_id))
+        print(f"  {'full' if k == 0 else k:>9} {n_train:8,d} "
+              f"{np.mean(vals) * 100:7.1f}% "
               f"{np.mean(cl) * 100:7.1f}% {sd:7.2f}pp {rng:7.2f}pp")
 
     print("\n  'seed sd' is the training-seed noise stage 0 predicted would")
