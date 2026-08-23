@@ -29,6 +29,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
+from transformers.utils import logging as hf_logging  # noqa: E402
+
+hf_logging.set_verbosity_error()   # the per-layer load report is 200 lines
 
 SPLITS = Path("eval/splits")
 MODEL = "microsoft/deberta-v3-base"
@@ -73,8 +76,17 @@ def main():
 
     # ---------------------------------------------------------------- 2
     rule("2. model")
+    # dtype=float32 is load-bearing. Without it transformers takes the
+    # dtype from the checkpoint and loads fp16, and DeBERTa-v3's
+    # disentangled attention overflows in half precision: loss starts
+    # correctly at ln(77) and is NaN within ten steps, at every learning
+    # rate. Fifteen runs once trained to exactly 1/77 for this reason.
+    # Qwen is fine in fp16; this model is not.
     model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL, num_labels=len(labels)).to(device)
+        MODEL, num_labels=len(labels), dtype=torch.float32).to(device)
+    dtypes = {p.dtype for p in model.parameters()}
+    if dtypes != {torch.float32}:
+        raise RuntimeError(f"expected fp32 parameters, got {dtypes}")
     dtypes = {p.dtype for p in model.parameters()}
     print(f"  dtypes       {dtypes}")
     print(f"  num_labels   {model.config.num_labels}")
@@ -108,7 +120,7 @@ def main():
     for lr in LRS:
         torch.manual_seed(1)
         m = AutoModelForSequenceClassification.from_pretrained(
-            MODEL, num_labels=len(labels)).to(device)
+            MODEL, num_labels=len(labels), dtype=torch.float32).to(device)
         before = m.classifier.weight.detach().clone()
         opt = torch.optim.AdamW(m.parameters(), lr=lr)
         m.train()

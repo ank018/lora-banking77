@@ -39,6 +39,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
+from transformers.utils import logging as hf_logging  # noqa: E402
+
+hf_logging.set_verbosity_error()   # the per-layer load report is 200 lines
 
 from evaluator import evaluate_constrained, score  # noqa: E402
 from runner import write_env  # noqa: E402
@@ -114,8 +117,17 @@ def train_one(rung_rows, dev_rows, labels, seed, device):
     np.random.seed(seed)
 
     tok = AutoTokenizer.from_pretrained(MODEL)
+    # dtype=float32 is load-bearing. Without it transformers takes the
+    # dtype from the checkpoint and loads fp16, and DeBERTa-v3's
+    # disentangled attention overflows in half precision: loss starts
+    # correctly at ln(77) and is NaN within ten steps, at every learning
+    # rate. Fifteen runs once trained to exactly 1/77 for this reason.
+    # Qwen is fine in fp16; this model is not.
     model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL, num_labels=len(labels)).to(device)
+        MODEL, num_labels=len(labels), dtype=torch.float32).to(device)
+    dtypes = {p.dtype for p in model.parameters()}
+    if dtypes != {torch.float32}:
+        raise RuntimeError(f"expected fp32 parameters, got {dtypes}")
 
     train_ds = make_dataset(rung_rows, labels, tok)
     dev_ds = make_dataset(dev_rows, labels, tok)
