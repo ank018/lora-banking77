@@ -132,8 +132,10 @@ def train_one(rung_rows, dev_rows, labels, seed, device):
     dev_y = [idx[r["label"]] for r in dev_rows]
     best_acc, best_state, best_epoch = -1.0, None, -1
 
+    history = []
     for epoch in range(EPOCHS):
         model.train()
+        epoch_loss = []
         for ids, mask, y in train_dl:
             opt.zero_grad()
             loss = model(input_ids=ids.to(device),
@@ -143,15 +145,39 @@ def train_one(rung_rows, dev_rows, labels, seed, device):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             sched.step()
+            epoch_loss.append(loss.item())
+
+        mean_loss = float(np.mean(epoch_loss))
+        # A run that never learns is invisible in a final accuracy number.
+        # Fifteen runs once trained to exactly chance and reported only
+        # "1.3%", because this line did not exist.
+        if not np.isfinite(mean_loss):
+            raise RuntimeError(
+                f"loss is {mean_loss} at epoch {epoch} - training diverged")
 
         acc = np.mean(np.array(predict(model, dev_dl, device)) == dev_y)
+        history.append({"epoch": epoch, "loss": round(mean_loss, 4),
+                        "dev_acc": round(float(acc), 4)})
+        if epoch < 3 or epoch == EPOCHS - 1:
+            print(f"      ep{epoch:<2d} loss {mean_loss:6.3f}  "
+                  f"dev {acc * 100:5.1f}%", flush=True)
         if acc > best_acc:
             best_acc, best_epoch = float(acc), epoch
             best_state = {k: v.detach().cpu().clone()
                           for k, v in model.state_dict().items()}
 
     model.load_state_dict(best_state)
-    return model, tok, {"dev_acc": best_acc, "best_epoch": best_epoch}
+
+    # Chance is 1/77 = 1.3%. Finishing there means the run is worthless and
+    # must not be silently written out as a data point.
+    if best_acc <= 2.0 / len(labels):
+        print(f"      !! dev accuracy {best_acc * 100:.1f}% is at chance "
+              f"(1/{len(labels)} = {100 / len(labels):.1f}%) - "
+              f"first-epoch loss {history[0]['loss']:.3f}, "
+              f"last {history[-1]['loss']:.3f}")
+
+    return model, tok, {"dev_acc": best_acc, "best_epoch": best_epoch,
+                        "history": history}
 
 
 def main():
@@ -214,6 +240,7 @@ def main():
                 "lr": LR, "epochs": EPOCHS, "batch": BATCH,
                 "max_len": MAX_LEN, "best_epoch": info["best_epoch"],
                 "dev_acc": info["dev_acc"], "train_seconds": round(train_s),
+                "history": info["history"],
                 "n_items": len(test),
             }, indent=2), encoding="utf-8", newline="\n")
 
