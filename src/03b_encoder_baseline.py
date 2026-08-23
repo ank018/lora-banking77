@@ -48,12 +48,21 @@ from runner import write_env  # noqa: E402
 
 SPLITS = Path("eval/splits")
 RUNS = Path("reports/runs")
-MODEL = "microsoft/deberta-v3-base"
+# roberta-base, not deberta-v3. DeBERTa-v3 could not be trained on this
+# stack at all: fp32 fixed its fp16 NaNs, but it then sat at chance (1.3%)
+# for 1,000 steps on data where roberta-base reached 84.4% dev through the
+# identical loop. It can memorise 32 examples perfectly yet generalise not
+# at all, which points at broken representations rather than a broken
+# setup - most likely a deberta-v3 / transformers 5.0 incompatibility.
+# Evidence in src/03e-03h and docs/04_encoder.md. Not chased further;
+# roberta-base is 125M against Qwen3's 2.03B, so the "much smaller model"
+# comparison is unaffected.
+MODEL = "roberta-base"
 
 # Fixed before the first run, identical for every rung and seed. Chosen
 # from the model card's usual range, not tuned here - tuning per rung
 # would confound "more data helps" with "this rung got better settings".
-LR = 2e-5
+LR = 5e-5     # proven on this data in src/03h
 # Fixed epochs means the smallest rung sees ~200 gradient steps and the
 # largest ~2,300, so the scaling curve partly measures optimisation budget
 # rather than data quantity. Best-epoch-on-dev mitigates this - each run
@@ -61,7 +70,10 @@ LR = 2e-5
 # the confound is real and is stated in docs/04_encoder.md rather than
 # engineered away. Fixed *steps* would remove it and introduce a different
 # one: the largest rung would see each example far fewer times.
-EPOCHS = 20
+# 30, not 20: roberta needed ~300 steps to fit rung 8, and the smallest
+# rung is only 10 steps per epoch. Fewer epochs would starve the bottom of
+# the scaling curve of optimisation rather than of data.
+EPOCHS = 30
 BATCH = 16
 MAX_LEN = 64          # p95 of Banking77 is 29 words; 64 tokens is ample
 WARMUP_RATIO = 0.1
@@ -197,8 +209,10 @@ def main():
     ap.add_argument("--runs-dir", default=str(RUNS))
     ap.add_argument("--rungs", nargs="*", type=int, default=RUNGS)
     ap.add_argument("--seeds", nargs="*", type=int, default=SEEDS)
+    ap.add_argument("--model", default=MODEL, dest="model_id")
     args = ap.parse_args()
     runs = Path(args.runs_dir)
+    globals()["MODEL"] = args.model_id
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     pool = read_jsonl(SPLITS / "train_pool.jsonl")
@@ -217,7 +231,8 @@ def main():
     for k in args.rungs:
         rung = load_rung(k, pool_by_id)
         for seed in args.seeds:
-            name = f"deberta_rung{k:02d}_seed{seed}"
+            tag = MODEL.split("/")[-1].replace("-", "")
+            name = f"{tag}_rung{k:02d}_seed{seed}"
             d = runs / f"{name}__constrained"
             if (d / "predictions.jsonl").exists():
                 recs = read_jsonl(d / "predictions.jsonl")
