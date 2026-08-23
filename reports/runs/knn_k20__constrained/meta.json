@@ -2,5 +2,7 @@
   "config": "knn_k20",
   "regime": "constrained",
   "model": "tfidf char_wb 3-5 + kNN",
+  "k": 20,
+  "n_pool": 9387,
   "n_items": 3080
 }

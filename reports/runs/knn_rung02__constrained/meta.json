@@ -1,0 +1,9 @@
+{
+  "config": "knn_rung02",
+  "regime": "constrained",
+  "model": "tfidf char_wb 3-5 + kNN",
+  "rung_per_class": 2,
+  "n_pool": 154,
+  "k_selected_on_dev": 20,
+  "n_items": 3080
+}
