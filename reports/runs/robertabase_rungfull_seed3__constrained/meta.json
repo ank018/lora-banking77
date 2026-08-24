@@ -1,0 +1,93 @@
+{
+  "config": "robertabase_rungfull_seed3",
+  "regime": "constrained",
+  "model": "roberta-base",
+  "rung_per_class": 0,
+  "n_train": 9387,
+  "seed": 3,
+  "lr": 5e-05,
+  "epochs": 15,
+  "batch": 16,
+  "max_len": 64,
+  "best_epoch": 13,
+  "dev_acc": 0.952922077922078,
+  "train_seconds": 1809,
+  "history": [
+    {
+      "epoch": 0,
+      "loss": 3.1725,
+      "dev_acc": 0.7744
+    },
+    {
+      "epoch": 1,
+      "loss": 0.7184,
+      "dev_acc": 0.914
+    },
+    {
+      "epoch": 2,
+      "loss": 0.3272,
+      "dev_acc": 0.9302
+    },
+    {
+      "epoch": 3,
+      "loss": 0.2137,
+      "dev_acc": 0.9497
+    },
+    {
+      "epoch": 4,
+      "loss": 0.1472,
+      "dev_acc": 0.9481
+    },
+    {
+      "epoch": 5,
+      "loss": 0.1094,
+      "dev_acc": 0.9302
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0896,
+      "dev_acc": 0.9464
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0527,
+      "dev_acc": 0.9481
+    },
+    {
+      "epoch": 8,
+      "loss": 0.0385,
+      "dev_acc": 0.9464
+    },
+    {
+      "epoch": 9,
+      "loss": 0.0267,
+      "dev_acc": 0.9497
+    },
+    {
+      "epoch": 10,
+      "loss": 0.0175,
+      "dev_acc": 0.9432
+    },
+    {
+      "epoch": 11,
+      "loss": 0.0101,
+      "dev_acc": 0.9513
+    },
+    {
+      "epoch": 12,
+      "loss": 0.0052,
+      "dev_acc": 0.9513
+    },
+    {
+      "epoch": 13,
+      "loss": 0.0029,
+      "dev_acc": 0.9529
+    },
+    {
+      "epoch": 14,
+      "loss": 0.0019,
+      "dev_acc": 0.9497
+    }
+  ],
+  "n_items": 3080
+}
