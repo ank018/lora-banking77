@@ -28,12 +28,28 @@ VERSIONS = {
     "zero_shot": "zs-v1",
     "few_shot": "fs-v1",
     "retrieval": "rag-v1",
+    "bare": "bare-v1",
 }
 
 SYSTEM = (
     "You are a banking customer-service intent classifier. "
     "Reply with exactly one intent label from the list and nothing else. "
     "Do not explain. Do not invent labels."
+)
+
+# For the fine-tuned model. No label list: after training the label space
+# lives in the weights, so listing 77 labels every call would be paying
+# ~390 tokens per prediction for information the model already has. 58
+# tokens against zero-shot's 447.
+#
+# It also means the fine-tuned model receives strictly LESS information in
+# its prompt than every prompting baseline it is compared against. That
+# handicap runs in the conservative direction - if it wins anyway the
+# result is clean, and if it loses it lost while disadvantaged. Same
+# principle as choosing lenient parsing for the headline in stage 2.
+SYSTEM_BARE = (
+    "You are a banking customer-service intent classifier. "
+    "Reply with exactly one intent label and nothing else."
 )
 
 
@@ -221,3 +237,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ------------------------------------------------------------ fine-tuned
+def bare(query):
+    """Prompt for the fine-tuned model: no label list, no exemplars."""
+    return [{"role": "system", "content": SYSTEM_BARE},
+            {"role": "user", "content": f"Query: {query}\nIntent:"}]
