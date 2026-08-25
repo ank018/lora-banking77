@@ -58,6 +58,11 @@ CHECKPOINT_EVERY = 256
 CONFIGS = {
     "majority":      {"kind": "majority"},
     "zero_shot":     {"kind": "prompt", "template": "zero_shot"},
+    # The untuned model on the fine-tuned model's prompt. Without this,
+    # "LoRA took the model from 47.1% to 93.6%" mixes two changes: the
+    # adapter, and dropping the 77-label list from the prompt. This holds
+    # the prompt constant so the adapter is the only difference.
+    "bare":          {"kind": "prompt", "template": "bare"},
     "few_shot_k5":   {"kind": "prompt", "template": "few_shot", "k": 5},
     "few_shot_k20":  {"kind": "prompt", "template": "few_shot", "k": 20},
     # Same k, different draws. Separates "exemplars hurt" from "this draw
@@ -141,7 +146,9 @@ def build_retriever(pool):
 def build_prompts(cfg, rows, labels, pool, tok, render):
     """cfg may carry a 'seed' overriding which exemplars are drawn."""
     tmpl = cfg["template"]
-    if tmpl == "zero_shot":
+    if tmpl == "bare":
+        msgs = [P.bare(r["text"]) for r in rows]
+    elif tmpl == "zero_shot":
         msgs = [P.zero_shot(r["text"], labels) for r in rows]
     elif tmpl == "few_shot":
         ex = P.fixed_exemplars(pool, cfg["k"], seed=cfg.get("seed", 20260821))
