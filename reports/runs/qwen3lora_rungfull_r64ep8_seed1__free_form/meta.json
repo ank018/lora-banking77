@@ -1,0 +1,81 @@
+{
+  "config": "qwen3lora_rungfull_r64ep8_seed1",
+  "model": "Qwen/Qwen3-1.7B",
+  "rung_per_class": 0,
+  "n_train": 9387,
+  "seed": 1,
+  "rank": 64,
+  "alpha": 128,
+  "dropout": 0.05,
+  "targets": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj"
+  ],
+  "lr": 0.0002,
+  "epochs": 8,
+  "batch": 8,
+  "grad_accum": 2,
+  "max_len": 96,
+  "eval_batch": 32,
+  "prompt_versions": {
+    "system": "sys-v1",
+    "zero_shot": "zs-v1",
+    "few_shot": "fs-v1",
+    "retrieval": "rag-v1",
+    "bare": "bare-v1"
+  },
+  "prompt_tokens": 63,
+  "best_epoch": 6,
+  "dev_acc": 0.9512987012987013,
+  "history": [
+    {
+      "epoch": 0,
+      "loss": 0.5452,
+      "dev_acc": 0.8604
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0995,
+      "dev_acc": 0.9188
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0475,
+      "dev_acc": 0.9123
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0228,
+      "dev_acc": 0.9399
+    },
+    {
+      "epoch": 4,
+      "loss": 0.013,
+      "dev_acc": 0.9383
+    },
+    {
+      "epoch": 5,
+      "loss": 0.0066,
+      "dev_acc": 0.9416
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0021,
+      "dev_acc": 0.9513
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0006,
+      "dev_acc": 0.9481
+    }
+  ],
+  "trainable_params": 69730304,
+  "train_seconds": 5631,
+  "n_items": 3080,
+  "regime": "free_form"
+}
