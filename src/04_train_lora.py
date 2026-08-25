@@ -297,8 +297,24 @@ def main():
     # 4-epoch results and the comparison loses the thing it compares to.
     ap.add_argument("--tag", default="",
                     help="suffix for run names, e.g. ep8")
+    # Stage 6 found r=64 worth +3.35 pp over r=16 at 616 examples. Whether
+    # that survives at 9,387 is a separate question, so rank is a flag
+    # rather than an edit - and it lands in meta.json either way.
+    ap.add_argument("--rank", type=int, default=RANK)
+    ap.add_argument("--alpha", type=int, default=None,
+                    help="defaults to 2x rank, holding alpha/r fixed so "
+                         "changing rank does not silently change the "
+                         "adapter's effective learning rate")
+    ap.add_argument("--lr", type=float, default=LR)
     args = ap.parse_args()
     runs = Path(args.runs_dir)
+
+    # train_one() and build_model() read these as module constants, so the
+    # flags have to land here or they parse and do nothing.
+    globals()["RANK"] = args.rank
+    globals()["ALPHA"] = (args.alpha if args.alpha is not None
+                          else 2 * args.rank)
+    globals()["LR"] = args.lr
 
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(MODEL)
@@ -313,6 +329,9 @@ def main():
     clean = clean_ids()
 
     print(f"{MODEL}  r={RANK} alpha={ALPHA} lr={LR} epochs={args.epochs}")
+    if RANK != 16:
+        print(f"  non-default rank: run names need --tag to avoid "
+              f"colliding with the r=16 results")
     print(f"rungs {args.rungs}  seeds {args.seeds}  "
           f"test {len(test):,d}  dev {len(dev):,d}")
     print(f"bar to clear: robertabase full pool 94.0% +/- 0.23 pp")
