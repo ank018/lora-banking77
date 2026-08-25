@@ -292,6 +292,11 @@ def main():
                     default=["free_form", "constrained"])
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--save-adapter", action="store_true")
+    # Two configurations that differ in anything must not share a run
+    # directory. Without a tag, an 8-epoch rerun overwrites the committed
+    # 4-epoch results and the comparison loses the thing it compares to.
+    ap.add_argument("--tag", default="",
+                    help="suffix for run names, e.g. ep8")
     args = ap.parse_args()
     runs = Path(args.runs_dir)
 
@@ -316,7 +321,8 @@ def main():
         rung = load_rung(k, pool_by_id)
         for seed in args.seeds:
             label_k = "full" if k == 0 else f"{k:02d}"
-            name = f"qwen3lora_rung{label_k}_seed{seed}"
+            suffix = f"_{args.tag}" if args.tag else ""
+            name = f"qwen3lora_rung{label_k}{suffix}_seed{seed}"
             done = all((runs / f"{name}__{rg}" / "predictions.jsonl").exists()
                        for rg in args.regimes)
             if done:
