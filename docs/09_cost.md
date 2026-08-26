@@ -21,8 +21,8 @@ Tesla T4, fp16, single-item constrained scoring. GPU rate $0.35/hour
 | zero-shot, 77 labels listed | 47.1% | — | 447 | 2.0 | 500 | $0.049 |
 | few-shot, 77 exemplars | 5.7% | — | 2,127 | 0.4 | 2,500 | $0.243 |
 | retrieval + LLM | 83.1% | — | 728 | 1.5 | 667 | $0.065 |
-| **roberta-base, fine-tuned** | **94.0%** | 31 min | 64 | 330 | **3.0** | $0.0003 |
-| **LoRA on Qwen3-1.7B** | **93.6%** | 76 min | 63 | 3.0 | **333** | $0.032 |
+| **roberta-base, fine-tuned** | **94.0%** ±0.23 | 31 min | 64 | 330 | **3.0** | $0.0003 |
+| **LoRA on Qwen3-1.7B** | **93.6%** ±0.26 | 76 min | 63 | 3.0 | **333** | $0.032 |
 | LoRA, rank 64 | 93.5% | 94 min | 63 | 2.7 | 370 | $0.036 |
 
 ## The cost argument is smaller than I kept saying
@@ -60,6 +60,35 @@ hardware; irrelevant if you rent by the hour.
 **The honest headline remains what it was: the 16× larger model is not more
 accurate** (93.59% ± 0.26 against 93.99% ± 0.23, p = 0.12). Cost is a
 supporting argument about latency and deployability, not a knockout blow.
+
+Where cost *does* decide something is the retrieval row below, and there it
+is not close.
+
+## The retrieval row: 2,200× for nothing
+
+`retrieval + LLM` at 83.1% and 667 ms/item is the most expensive way in
+this table to get an answer that was already available.
+
+Stage 4 established that **kNN over the same retrieved neighbours scores
+82.9%** — a difference of 0.2 points at p = 0.18, indistinguishable — and
+that the language model's answer equals the top-1 retrieved neighbour's
+label **81.4% of the time**. It is mostly repeating its own retriever.
+
+| | accuracy | ms/item |
+|---|---:|---:|
+| kNN over TF-IDF | 82.9% | 0.3 |
+| the same retrieval, then ask a 2B model | 83.1% | 667 |
+
+**The language model costs 2,200× the retriever it is reading from, and the
+paired test cannot distinguish their outputs.** Framed against roberta-base
+the row reads as 220× slower; framed against the component actually doing
+the work, it is an order of magnitude worse than that.
+
+This is the cleanest cost-per-accuracy failure in the project, and it is
+the architecture a great many production RAG-for-classification systems
+use. The fair caveat from `docs/04_baselines.md` still applies: the LLM
+does beat 1-NN (82.7 vs 80.2), so it is not purely copying. It just does
+not beat counting the neighbours, which costs nothing.
 
 ## Cost and accuracy are independent axes
 
