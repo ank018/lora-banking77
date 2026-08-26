@@ -25,7 +25,7 @@ to work, no scheduler, real rung-8 data. Both train and dev accuracy are
 reported - train rising while dev stays flat would mean memorisation
 without generalisation, which points at the labels.
 
-    python src/03h_model_vs_pipeline.py
+    python src/05e_model_vs_pipeline.py
 """
 
 import json

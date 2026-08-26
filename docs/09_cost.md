@@ -148,5 +148,5 @@ because they are large, but because nothing else separates the two.
 ## Artefacts
 
 ```
-src/08_cost_latency.py    reads meta.json; --gpu-rate and --volume are flags
+src/09a_cost_latency.py    reads meta.json; --gpu-rate and --volume are flags
 ```

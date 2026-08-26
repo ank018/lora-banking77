@@ -212,9 +212,9 @@ to a trained encoder at every size (`docs/05_encoder.md`).
 ## Artefacts
 
 ```
-src/03_baselines.py        prompting baselines, resumable, both regimes
-src/03c_knn_baseline.py    kNN, k chosen on dev
-src/03d_prior_probe.py     query-sensitivity and prior probe
+src/04a_baselines.py        prompting baselines, resumable, both regimes
+src/04b_knn_baseline.py    kNN, k chosen on dev
+src/04c_prior_probe.py     query-sensitivity and prior probe
 src/compare.py             paired McNemar between any two runs
 src/inspect_prompts.py     prompt rendering and cross-seed collapse table
 src/analyse_fewshot.py     exemplar-set membership analysis

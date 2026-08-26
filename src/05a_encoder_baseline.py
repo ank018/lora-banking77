@@ -22,8 +22,8 @@ Nothing here is tuned against test. Hyperparameters are fixed before the
 first run and the same for every rung; model selection within a run uses
 dev.
 
-    python src/03b_encoder_baseline.py --rungs 8 --seeds 1     # smoke
-    python src/03b_encoder_baseline.py                          # everything
+    python src/05a_encoder_baseline.py --rungs 8 --seeds 1     # smoke
+    python src/05a_encoder_baseline.py                          # everything
 """
 
 import argparse

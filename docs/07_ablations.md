@@ -130,11 +130,11 @@ right at large data, which is a distinction I did not think to make.
 ## Artefacts
 
 ```
-src/05_ablations.py       one factor at a time; imports the real training loop
+src/07a_ablations.py       one factor at a time; imports the real training loop
 reports/ablations.json    per-seed dev accuracy and full loss history
 reports/runs/qwen3lora_rungfull_r64ep8_seed1__*   the full-pool rank check
 ```
 
-`05_ablations.py` imports `04_train_lora.py` rather than reimplementing
+`07a_ablations.py` imports `06a_train_lora.py` rather than reimplementing
 training, so the ablations exercise exactly the code that produced the
 headline numbers.

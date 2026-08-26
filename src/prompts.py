@@ -56,7 +56,7 @@ SYSTEM_BARE = (
 def load_labels():
     p = SPLITS / "train_pool.jsonl"
     if not p.exists():
-        raise FileNotFoundError(f"{p} missing - run src/01_build_dataset.py")
+        raise FileNotFoundError(f"{p} missing - run src/01b_build_dataset.py")
     with open(p, encoding="utf-8") as f:
         return sorted({json.loads(line)["label"] for line in f})
 

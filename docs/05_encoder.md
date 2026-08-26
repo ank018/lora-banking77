@@ -52,7 +52,7 @@ while the encoder was trained on 616.** A fifteen-fold data advantage,
 introduced by the way the baselines were built and repeated without being
 checked.
 
-`src/03c_knn_baseline.py --rungs` now restricts kNN's reference set to each
+`src/04b_knn_baseline.py --rungs` now restricts kNN's reference set to each
 training rung, so both methods share an x-axis. The full-pool kNN figure is
 still reported, because "what you get from all your labelled data with no
 model" is a real question — but it is no longer set against models trained
@@ -237,12 +237,12 @@ the list of things a plan anticipates.
 ## Artefacts
 
 ```
-src/03b_encoder_baseline.py    the sweep; --rungs 0 means the full pool
-src/03c_knn_baseline.py        kNN, k on dev, --rungs for the matched curve
-src/03e_diagnose_encoder.py    tokenizer, dtype, first forward pass, 40 steps
-src/03f_overfit_test.py        can three encoders memorise 32 examples
-src/03g_isolate_training.py    scheduler and learning rate, four configs
-src/03h_model_vs_pipeline.py   roberta vs deberta, 1,000 steps, real data
+src/05a_encoder_baseline.py    the sweep; --rungs 0 means the full pool
+src/04b_knn_baseline.py        kNN, k on dev, --rungs for the matched curve
+src/05b_diagnose_encoder.py    tokenizer, dtype, first forward pass, 40 steps
+src/05c_overfit_test.py        can three encoders memorise 32 examples
+src/05d_isolate_training.py    scheduler and learning rate, four configs
+src/05e_model_vs_pipeline.py   roberta vs deberta, 1,000 steps, real data
 reports/runs/robertabase_rung*_seed*__constrained/
 reports/runs/knn_rung*__constrained/
 ```

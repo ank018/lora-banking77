@@ -179,5 +179,5 @@ generated every epoch; only the per-item results are thrown away.
 ## Artefacts
 
 ```
-src/07_taxonomy.py    confusion pairs, symmetry, persistence, data disagreement
+src/08a_taxonomy.py    confusion pairs, symmetry, persistence, data disagreement
 ```

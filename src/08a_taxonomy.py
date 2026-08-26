@@ -30,8 +30,8 @@ What it reports:
                       evidence from stage 1 shows the training data itself
                       disagrees about the boundary
 
-    python src/07_taxonomy.py
-    python src/07_taxonomy.py --configs qwen3lora_rungfull_ep8_seed1
+    python src/08a_taxonomy.py
+    python src/08a_taxonomy.py --configs qwen3lora_rungfull_ep8_seed1
 """
 
 import argparse

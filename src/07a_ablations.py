@@ -32,7 +32,7 @@ Written prediction, before any of these run:
               epoch budget
   targets     attention-only within ~1 point of attention+MLP
 
-    python src/05_ablations.py --rung 8 --seeds 1 2 3
+    python src/07a_ablations.py --rung 8 --seeds 1 2 3
 """
 
 import argparse
@@ -71,10 +71,10 @@ ABLATIONS = {
 
 
 def load_trainer():
-    """04_train_lora.py starts with a digit, so it cannot be imported
+    """06a_train_lora.py starts with a digit, so it cannot be imported
     normally. Reusing it rather than copying the training loop means the
     ablations exercise exactly the code the headline runs used."""
-    path = Path(__file__).resolve().parent / "04_train_lora.py"
+    path = Path(__file__).resolve().parent / "06a_train_lora.py"
     spec = importlib.util.spec_from_file_location("_lora", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

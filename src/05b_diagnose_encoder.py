@@ -18,7 +18,7 @@ downstream of it.
 This runs ~40 steps on the smallest rung and prints everything the main
 script should have been printing all along.
 
-    python src/03e_diagnose_encoder.py
+    python src/05b_diagnose_encoder.py
 """
 
 import json

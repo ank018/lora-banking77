@@ -22,7 +22,7 @@ collapsed config should span very few. That number is the collapse,
 measured directly on the model's beliefs rather than inferred from
 accuracy.
 
-    !python src/03d_prior_probe.py
+    !python src/04c_prior_probe.py
 """
 
 import json

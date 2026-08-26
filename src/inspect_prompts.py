@@ -18,7 +18,7 @@ its own last exemplar, recency is the mechanism. If they collapse onto the
 same label regardless of position, it is something about that label. If
 accuracy swings widely, the finding is exemplar-dependent and weak.
 
-Config definitions (k, seed) are read from src/03_baselines.py rather than
+Config definitions (k, seed) are read from src/04a_baselines.py rather than
 duplicated here - a copy would drift from what actually ran, and then this
 script would reconstruct the wrong exemplars and quietly mislead.
 """
@@ -41,9 +41,9 @@ SAMPLE_SEED = 20260821
 
 
 def load_configs():
-    """Read CONFIGS from 03_baselines.py - the module name starts with a
+    """Read CONFIGS from 04a_baselines.py - the module name starts with a
     digit, so it cannot be imported normally."""
-    path = Path(__file__).resolve().parent / "03_baselines.py"
+    path = Path(__file__).resolve().parent / "04a_baselines.py"
     spec = importlib.util.spec_from_file_location("_baselines", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

@@ -32,7 +32,7 @@ SPLITS = Path("eval/splits")
 def labels():
     p = SPLITS / "train_pool.jsonl"
     if not p.exists():
-        pytest.skip("splits not built - run src/01_build_dataset.py")
+        pytest.skip("splits not built - run src/01b_build_dataset.py")
     with open(p, encoding="utf-8") as f:
         return sorted({json.loads(line)["label"] for line in f})
 

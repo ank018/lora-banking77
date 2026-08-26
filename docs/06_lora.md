@@ -290,7 +290,7 @@ data, costs 94 minutes rather than 79.
 ## Artefacts
 
 ```
-src/04_train_lora.py      training, both eval regimes, --tag for variants
+src/06a_train_lora.py      training, both eval regimes, --tag for variants
 src/prompts.py            bare() and SYSTEM_BARE, versioned
 src/compare_families.py   seed-level and item-level tests between procedures
 reports/runs/qwen3lora_*  predictions, env manifest, full loss history

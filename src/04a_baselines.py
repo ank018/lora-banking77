@@ -24,8 +24,8 @@ What is stored per item, and why:
   top5         enough of the score vector to diagnose a failure without
                committing 237,000 floats per configuration to git.
 
-    python src/03_baselines.py --configs zero_shot --limit 64
-    python src/03_baselines.py                      # everything
+    python src/04a_baselines.py --configs zero_shot --limit 64
+    python src/04a_baselines.py                      # everything
 """
 
 import argparse

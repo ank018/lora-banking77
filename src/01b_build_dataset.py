@@ -20,7 +20,7 @@ similarity, twin label) rather than as a boolean. Flags are derived at
 analysis time; storing the evidence means a later question about a
 different threshold does not require recomputing anything.
 
-    python src/01_build_dataset.py
+    python src/01b_build_dataset.py
 """
 
 import hashlib

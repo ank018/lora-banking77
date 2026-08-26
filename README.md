@@ -214,10 +214,10 @@ python -m venv .venv && .venv/bin/activate
 python -m pip install -r requirements.txt
 
 python -m pytest tests -q                 # 43 tests: splits + evaluator
-python src/01_build_dataset.py            # rebuild and verify the splits
+python src/01b_build_dataset.py            # rebuild and verify the splits
 python src/summarise_runs.py              # every result, from committed runs
 python src/compare_families.py robertabase_rungfull qwen3lora_rungfull_ep8
-python src/08_cost_latency.py
+python src/09a_cost_latency.py
 ```
 
 GPU work ran on Kaggle's free tier — Tesla T4, ~27 GPU-hours total.

@@ -31,7 +31,7 @@ def read_jsonl(path):
 @pytest.fixture(scope="module")
 def manifest():
     if not MANIFEST.exists():
-        pytest.skip("splits not built - run src/01_build_dataset.py")
+        pytest.skip("splits not built - run src/01b_build_dataset.py")
     return json.loads(MANIFEST.read_text(encoding="utf-8"))
 
 

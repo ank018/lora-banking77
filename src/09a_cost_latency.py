@@ -27,8 +27,8 @@ What is measured and what is not:
 
 The kNN row has no GPU cost at all, which is the point of including it.
 
-    python src/08_cost_latency.py
-    python src/08_cost_latency.py --gpu-rate 0.40
+    python src/09a_cost_latency.py
+    python src/09a_cost_latency.py --gpu-rate 0.40
 """
 
 import argparse

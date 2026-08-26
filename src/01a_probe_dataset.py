@@ -5,7 +5,7 @@ This runs before any model, any prompt, any GPU. It is a go/no-go on
 Banking77, and it produces the four numbers that decide whether the
 experimental design in the plan is even measurable:
 
-  1. Split sizes -> the resolution table from 00_sizing.py
+  1. Split sizes -> the resolution table from 00a_sizing.py
   2. Class balance -> whether the small rungs of the scaling curve are
      size-limited or coverage-limited (these are different findings)
   3. Cross-split near-duplicates -> whether test is honest

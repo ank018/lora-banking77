@@ -15,7 +15,7 @@ every other respect. The learning rate is printed as the optimiser sees it,
 because a scheduler that has silently zeroed it looks exactly like a model
 that will not learn.
 
-    python src/03g_isolate_training.py
+    python src/05d_isolate_training.py
 """
 
 import json

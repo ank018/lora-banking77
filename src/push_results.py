@@ -8,7 +8,7 @@ configuration completes rather than collected at the end of the day.
 
 Chain it onto the run so persistence is not a step anyone can forget:
 
-    !python src/03_baselines.py --runs-dir /kaggle/working/runs \\
+    !python src/04a_baselines.py --runs-dir /kaggle/working/runs \\
         --configs few_shot_k77 \\
       && python src/push_results.py --runs-dir /kaggle/working/runs \\
         --message "results: few_shot_k77"

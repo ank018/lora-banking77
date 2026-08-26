@@ -21,7 +21,7 @@ The second matters. Comparing full-pool kNN against an encoder trained on
 616 examples flatters the encoder by a factor of fifteen on data, and the
 first version of this script did exactly that.
 
-    python src/03c_knn_baseline.py --rungs
+    python src/04b_knn_baseline.py --rungs
 """
 
 import argparse

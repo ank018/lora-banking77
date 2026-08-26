@@ -20,7 +20,7 @@ and no reason not to. A model that cannot is misconfigured.
 
 Running the same loop over three encoders makes the answer unambiguous.
 
-    python src/03f_overfit_test.py
+    python src/05c_overfit_test.py
 """
 
 import json

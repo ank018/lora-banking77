@@ -35,8 +35,8 @@ Design decisions, fixed before the first run:
                 test. Free-form rather than constrained because dev runs
                 every epoch and generation is roughly 5x cheaper here.
 
-    python src/04_train_lora.py --rungs 8 --seeds 1        # smoke
-    python src/04_train_lora.py                             # sweep
+    python src/06a_train_lora.py --rungs 8 --seeds 1        # smoke
+    python src/06a_train_lora.py                             # sweep
 """
 
 import argparse
