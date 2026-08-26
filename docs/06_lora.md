@@ -47,7 +47,15 @@ model is also being denied 384 tokens of context the baseline received.
 
 ## How much data does it need?
 
-Constrained accuracy on test, seed 1, 8 epochs, best epoch chosen on dev:
+Constrained accuracy on test, seed 1, 8 epochs, best epoch chosen on dev.
+
+**The reported series is `qwen3lora_rung*_ep8`.** An earlier 4-epoch series
+exists in `reports/runs/` and is also aggregated by `summarise_runs.py` —
+at 616 examples it reads 82.6% against the 8-epoch run's 81.2%. Both are
+real; the 8-epoch series is the one quoted throughout, because it matches
+the epoch budget used at the full pool and therefore the encoder
+comparison. Reading the two as one series would put a 1.4-point step in the
+curve that is training length, not data.
 
 | examples | per class | LoRA | free-form | unparseable |
 |---:|---:|---:|---:|---:|
@@ -124,8 +132,10 @@ project needs adjusting for recall.
 
 ## Training-seed noise
 
-Full pool, 8 epochs, three seeds: **93.90 / 93.47 / 93.41 → 93.59%,
-sd 0.26 pp.**
+Full pool, 8 epochs, three seeds, **constrained**: 93.90 / 93.47 / 93.41
+→ **93.59%, sd 0.26 pp.** Free-form on the same three runs gives sd
+0.20 pp. Every headline in this project uses constrained, so 0.26 is the
+figure quoted — the regime matters and is easy to omit.
 
 Nearly identical to roberta-base's 0.23 pp. I had expected generation-based
 training on a 2B model to be noisier than a classification head on a 125M
@@ -172,8 +182,8 @@ scale. These are context for the experiment above, not the experiment.
 | base model, bare prompt | 31.4% | 0 |
 | zero-shot, 77 labels listed | 47.1% | 0 |
 | kNN over TF-IDF | 82.9% | 9,387 |
-| roberta-base, fully fine-tuned | 94.0% ± 0.23 | 9,387 |
-| **LoRA on Qwen3-1.7B** | **93.6% ± 0.26** | **9,387** |
+| roberta-base, fully fine-tuned | 94.0% ± 0.23 *(constrained)* | 9,387 |
+| **LoRA on Qwen3-1.7B** | **93.6% ± 0.26** *(constrained)* | **9,387** |
 
 ### When is LoRA worth it?
 
@@ -290,7 +300,7 @@ data, costs 94 minutes rather than 79.
 ## Artefacts
 
 ```
-src/06a_train_lora.py      training, both eval regimes, --tag for variants
+src/04_train_lora.py      training, both eval regimes, --tag for variants
 src/prompts.py            bare() and SYSTEM_BARE, versioned
 src/compare_families.py   seed-level and item-level tests between procedures
 reports/runs/qwen3lora_*  predictions, env manifest, full loss history

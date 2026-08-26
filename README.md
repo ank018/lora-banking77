@@ -214,17 +214,18 @@ python -m venv .venv && .venv/bin/activate
 python -m pip install -r requirements.txt
 
 python -m pytest tests -q                 # 43 tests: splits + evaluator
-python src/01b_build_dataset.py            # rebuild and verify the splits
+python src/01_build_dataset.py            # rebuild and verify the splits
 python src/summarise_runs.py              # every result, from committed runs
 python src/compare_families.py robertabase_rungfull qwen3lora_rungfull_ep8
-python src/09a_cost_latency.py
+python src/08_cost_latency.py
 ```
 
 GPU work ran on Kaggle's free tier — Tesla T4, ~27 GPU-hours total.
 
 ```
-src/            numbered by pipeline order; unnumbered files are libraries
-docs/           numbered by stage; the two sequences are not the same
+src/            numbered to match docs/ stages; unnumbered are libraries
+                (no 02 - the evaluator is a library, not a stage)
+docs/           one document per stage, 00-09
 eval/splits/    frozen splits, nested rungs, near-duplicate evidence, manifest
 reports/runs/   every prediction, with env manifest and full config
 tests/          43 tests
