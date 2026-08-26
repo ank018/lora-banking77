@@ -57,6 +57,14 @@ THROUGHPUT = {
 ROBERTA_ITEMS_PER_SEC = 330.0   # 3 ms/item, single-item forward, seq len 64
 KNN_ITEMS_PER_SEC = 3000.0      # CPU, TF-IDF transform + neighbour lookup
 
+# Some baselines ran before meta.json recorded prompt_tokens. These come
+# from the stage-3a token report and docs/04_baselines.md rather than being
+# silently blank, which reads like missing data instead of an older run.
+FALLBACK_TOKENS = {
+    "zero_shot": 447,
+    "roberta": 64,      # max_len, not a prompt - the encoder has no prompt
+}
+
 # Rows to report, in the order a reader should meet them.
 ROWS = [
     ("majority", "majority class", None),
@@ -109,6 +117,8 @@ def gather(family, kind):
     train_s = [m["train_seconds"] for m in metas if m.get("train_seconds")]
     tokens = next((m.get("prompt_tokens") for m in metas
                    if m.get("prompt_tokens")), None)
+    if tokens is None:
+        tokens = FALLBACK_TOKENS.get(kind)
     params = {
         "roberta": 125e6, "qwen3lora": 2.03e9, "qwen3lora_r64": 2.03e9,
         "zero_shot": 2.03e9, "bare": 2.03e9, "few_shot_k77": 2.03e9,
@@ -124,6 +134,8 @@ def gather(family, kind):
         ips = ROBERTA_ITEMS_PER_SEC
     else:
         ips = THROUGHPUT.get(kind)
+    if kind is None:          # majority class: a constant, not a model
+        ips = None
 
     return {
         "n_runs": len(dirs),
@@ -167,13 +179,15 @@ def main():
         cost_1k = (1000.0 / ips) / 3600.0 * args.gpu_rate if ips else None
         if kind == "knn":
             cost_1k = 0.0
+        note = "  (arithmetic, no model)" if kind is None else ""
         rows.append((label, g, ms, cost_1k))
         print(f"  {label:30s} {g['acc'] * 100:6.1f}% "
               f"{fmt(g['sd'], 'pp'):>6s} "
               f"{fmt(g['train_min'], ' min', 0):>8s} "
               f"{fmt(g['tokens'], '', 0):>7s} "
               f"{fmt(ips, '', 1):>8s} {fmt(ms, '', 1):>8s} "
-              f"{'free' if cost_1k == 0 else fmt(cost_1k, '', 4):>8s}")
+              f"{'free' if cost_1k == 0 else fmt(cost_1k, '', 4):>8s}"
+              + note)
 
     # ------------------------------------------------------- comparisons
     print(f"\n  relative to roberta-base:")
@@ -198,9 +212,22 @@ def main():
               f"${hours * args.gpu_rate:9,.0f}"
               + ("   (runs on CPU)" if g["params"] == 0 else ""))
 
-    print("\n  Training is a one-off; inference is not. At any serious volume")
-    print("  the per-prediction column dominates, and it is the column this")
-    print("  project's accuracy tables never showed.")
+    print("\n  Read the dollar column before drawing a business case from")
+    print("  it. The whole spread here is $0 to $243 a month - less than one")
+    print("  engineer-hour. In dollars, at this volume, none of these")
+    print("  methods is expensive and the cost argument does not decide")
+    print("  anything.")
+    print("\n  What the table does support:")
+    print("    latency      3 ms vs 333 ms per prediction. Real for an")
+    print("                 interactive router, irrelevant for batch triage.")
+    print("    deployment   roberta and kNN run on CPU; the LoRA model needs")
+    print("                 a GPU to be practical. That is an infrastructure")
+    print("                 decision, not a line item.")
+    print("    capacity     0.8 vs 93 GPU-hours/month. Matters if you")
+    print("                 provision, not if you rent by the hour.")
+    print("\n  And the row that makes the point best: few-shot with 77")
+    print("  exemplars is 825x slower than roberta AND 88 points less")
+    print("  accurate. Cost and accuracy are independent axes.")
 
 
 if __name__ == "__main__":
