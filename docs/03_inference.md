@@ -57,9 +57,16 @@ reduction order rather than by the model.
    like a random seed. A result compared across two batch sizes is not a
    comparison.
 2. **The noise floor has a third component.** Alongside decoding noise and
-   training-seed variance, there is batching noise. It is cheap to measure
-   — the same configuration at two batch sizes, two passes — and stage 5
-   will do so rather than assume it is negligible.
+   training-seed variance, there is batching noise.
+
+   Two later observations put a size on it. A clean regeneration of
+   `few_shot_k20_s2` differed from a resumed run by **2 rows in 3,080**
+   (0.06%), and the 8-epoch LoRA rerun of an identical config differed by
+   **81 rows** — but that second figure mixes batching noise with training
+   noise and cannot be attributed here. Training-seed variance, measured
+   properly in stages 5 and 6, is **0.23–0.26 pp** at full data. Batching
+   noise is smaller than that and was never isolated in its own experiment;
+   it is recorded per run rather than measured.
 
 ### Where the noise lands
 
@@ -104,15 +111,20 @@ Peak VRAM 8.69 GB of 14.56 available.
 
 Projected for the whole project, using the stage-3a token budgets:
 
-| Work | Estimate |
-|---|---:|
-| Prompting baselines (zero-shot, few-shot ×3, retrieval) | ~6.5 h |
-| LoRA training, 8 configs × 3 seeds | ~6 h |
-| LoRA evaluation (bare-query prompts, 58 tokens) | ~5 h |
-| **Total** | **~17 h** |
+| Work | Estimate | Actual |
+|---|---:|---:|
+| Prompting baselines | ~6.5 h | ~7 h |
+| Encoder sweep (not in the original plan) | — | ~6 h |
+| Encoder diagnosis (DeBERTa, untrainable) | — | ~2 h |
+| LoRA training and evaluation | ~11 h | ~9 h |
+| Ablations | — | ~2.7 h |
+| **Total** | **~17 h** | **~27 h** |
 
-That fits inside one week of Kaggle's 30-hour quota with margin for the
-reruns this project has already shown it needs.
+The projection was 60% of what the project cost. The overrun is not in the
+lines that were estimated — those came in close — but in work that was not
+in the plan at all: an encoder baseline that grew into its own stage, and
+two hours diagnosing a model that turned out to be untrainable. Both were
+worth doing; neither was foreseeable from a throughput measurement.
 
 ### A held optimisation
 

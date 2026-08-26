@@ -1,9 +1,9 @@
-# Stage 3 — Baselines
+# Stage 4 — Baselines
 
-Six methods, one frozen 3,080-item test set, both decoding regimes. The
-stage was planned as scaffolding for the fine-tuning experiment. It became
-the most informative part of the project, and it moved the bar the
-fine-tune has to clear from 45.8% to 82.9%.
+Seven methods, one frozen 3,080-item test set, both decoding regimes.
+Planned as context for the fine-tuning experiment — numbers that let a
+reader judge whether the LoRA result is any good — and that is what it
+remains. Two of its findings turned out to matter more than expected.
 
 ## Results
 
@@ -13,13 +13,21 @@ fine-tune has to clear from 45.8% to 82.9%.
 | few-shot, 77 examples | 5.7% | ±0.8 | **1** | GPU |
 | few-shot, 20 examples | 3.9 / 4.6 / 12.0% | ±0.7–1.2 | 3 | GPU |
 | few-shot, 5 examples | 22.0% | ±1.5 | **1** | GPU |
-| zero-shot | 45.8% | ±1.8 | **1** | GPU |
+| base model, bare prompt (no label list) | 31.4% | ±1.6 | **1** | GPU |
+| zero-shot, 77 labels listed | 45.8% | ±1.8 | **1** | GPU |
 | retrieval + LLM | 82.7% | ±1.3 | **1** | GPU |
 | **kNN, k=5, no model** | **82.9%** | ±1.3 | exact | **CPU, seconds** |
 
 CIs are unpaired binomial. Comparisons between rows use McNemar, which is
 tighter because the two runs agree on most items and only the discordant
 pairs carry information. **Bold "1" means unreplicated** — see Limitations.
+
+The `bare` row is the untuned model on the *fine-tuned* model's prompt, and
+it exists to separate the adapter from the label list in stage 6. Read
+against zero-shot, **the 77-label list is worth +15.7 pp to an untuned
+model** for 384 extra prompt tokens. Free-form it scores 1.7% with 96.1%
+unparseable — without the list the model cannot produce a valid label at
+all, and invents plausible ones (`card_waiting`).
 
 ## The language model is not earning its place
 
@@ -155,16 +163,19 @@ many-shot ICL fails in general**, and the write-up must not imply it.
   established. The collapse from 0 to 20 is far too large to be draw noise.
 - **Settings are not uniform.** `few_shot_k77` ran at generation batch 18
   where the rest used 32, because its prompts do not fit otherwise. Batch
-  size is a measured noise source (docs/03_inference.md).
+  size is a measured noise source (`docs/03_inference.md`).
 - **Reruns are not bit-identical.** A clean regeneration of
   `few_shot_k20_s2` differed from a resumed one by 2 rows in 3,080 —
   consistent with the batching noise measured in stage 3, appearing
   unprompted.
 - **Zero-shot is unreplicated** and is the reference point for every
   few-shot comparison.
-- The clean-subset column tracks full accuracy within ~1 point everywhere,
-  as expected: no prompting method except retrieval can memorise, and
-  retrieval's excess over the zero-shot calibration offset is ~0.6 points.
+- The clean-subset column tracks full accuracy within ~1 point everywhere.
+  At the time this was read as "no prompting method except retrieval can
+  memorise". Stage 6 showed the ~1-point gap is **intrinsic difficulty, not
+  memorisation** — near-duplicated items are common phrasings and simply
+  easier, and the gap appears even for zero-shot, which has no training set
+  at all. See `docs/06_lora.md`.
 
 ## Predictions, scored
 
@@ -181,13 +192,22 @@ Recorded before running, per the project's rules.
 | 7 | query sensitivity: zero-shot 25–40 distinct, k=20 under 10 | 30 / 10,5,6 ✓ |
 
 **Two of seven.** The largest miss (#4) was wrong in sign as well as
-magnitude. Prediction #3 in particular means the format-effect framing in
-`docs/02_evaluator.md` overstates its case by roughly tenfold; the
-three-regime reporting still earns its place, because measuring the effect
-is how we know it is small.
+magnitude.
 
-The best method in the project — kNN — was not in the plan, has no trained
-parameters, and runs on a laptop.
+Prediction #3 needs a later correction. The format effect measured **on the
+base model** was 1.3 points, and this document originally concluded that
+the framing in `docs/02_evaluator.md` overstated its case tenfold. Stage 6
+showed that is true only at the extremes. For a model fine-tuned on 154
+examples the free-form/constrained gap is **16.7 points**, and unparseable
+output runs at 34.9%. The effect is small for an untuned model with a label
+list and for a model trained on 9,387 examples, and large in between —
+which is exactly where a practitioner with few labels operates.
+
+kNN was not in the plan, has no trained parameters, and runs on a laptop.
+At the time it was the best method measured. Stage 5 showed that was an
+artefact of an unequal comparison — kNN had the full 9,387-example pool
+while trained models were being given 616 — and at matched data it loses
+to a trained encoder at every size (`docs/05_encoder.md`).
 
 ## Artefacts
 

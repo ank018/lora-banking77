@@ -1,4 +1,4 @@
-# Stage 5 — LoRA fine-tuning
+# Stage 6 — LoRA fine-tuning
 
 The experiment this project was built for. Qwen3-1.7B, LoRA rank 16 on all
 attention projections and the MLP triple, trained on nested subsets of a
@@ -79,12 +79,48 @@ target — **a third of the model's outputs still cannot be parsed.** Format
 compliance takes thousands of examples, not dozens, and it decays smoothly
 rather than snapping into place.
 
-This also revises the stage 3 finding. The format effect measured on the
+This also revises the stage 4 finding. The format effect measured on the
 *base* model was 1.3 points, which I described as small. It is small at
 either extreme — an untuned model with a label list, or a model trained on
 9,387 examples — and large in the middle, peaking at 16.7 points for a
 model trained on 154. The two-regime design earns its cost in that middle
 region, which is exactly where a practitioner with limited labels operates.
+
+## Near-duplicate memorisation: predicted, and absent
+
+Stage 1 found that 13.8% of test items have a same-label near-twin in the
+training pool, and predicted:
+
+> Full-test accuracy will exceed clean-subset accuracy for every fine-tuned
+> config, and **the gap will widen with rung size** — a fine-tuned model can
+> recall those twins and prompting cannot, so the effect grows with data.
+
+Every accuracy in this project was reported twice on the strength of that.
+The gap **narrows**:
+
+| examples | full | clean | gap |
+|---:|---:|---:|---:|
+| 154 | 66.7% | 65.1% | 1.6 |
+| 308 | 74.8% | 73.3% | 1.5 |
+| 616 | 81.2% | 79.7% | 1.5 |
+| 1,232 | 86.7% | 85.8% | 0.9 |
+| 1,848 | 89.3% | 88.3% | 1.0 |
+| 9,387 | 93.9% | 93.4% | **0.5** |
+
+roberta-base shows the same shape (0.8 → 0.5), and so does **zero-shot**,
+at 1.0 — a configuration that has no training set and therefore cannot
+memorise anything at all.
+
+So the gap is not memorisation. It is **intrinsic difficulty**:
+near-duplicated queries are common phrasings with many variants, and they
+are the easy ones. Every method finds them easier, including one with no
+training data, and the advantage shrinks as models get good enough to
+solve them anyway.
+
+The convention still earned its cost — dual reporting is how we know the
+effect is absent, and the alternative was asserting it after the fact — but
+the concern that motivated it did not materialise, and no headline in this
+project needs adjusting for recall.
 
 ## Training-seed noise
 
@@ -170,7 +206,7 @@ same answers.
 
 ## Configuration
 
-Fixed before the first run. Stage 6 varies one factor at a time from here,
+Fixed before the first run. Stage 7 varies one factor at a time from here,
 so those are honest variations rather than a search reported afterwards as
 an ablation.
 
@@ -190,6 +226,13 @@ prompt        bare, 63 tokens, no label list
 moments on fp16 parameters underflow, and the T4 has no bf16 to fall back
 on (`docs/00_environment.md`).
 
+Stage 7 varies rank, learning rate and target modules one at a time from
+this configuration (`docs/07_ablations.md`). In short: **the MLP modules
+matter far more than rank** — dropping `gate/up/down_proj` costs 7.8 points
+— and rank 64 is worth +3.35 points at 616 examples but **−0.42, not
+significant, at 9,387**. Capacity substitutes for data, exactly as the
+pretrained model's knowledge does.
+
 **The bare prompt is a deliberate handicap.** The fine-tuned model receives
 strictly less prompt context than every baseline it is compared against —
 63 tokens against zero-shot's 447. It also makes the cost comparison
@@ -207,17 +250,21 @@ that makes the expected result look weaker.
 
 Roughly 2.6× the training time and 100× the inference time for the same
 accuracy at full data. Matching the epoch budget made LoRA's cost
-disadvantage larger, not smaller.
+disadvantage larger, not smaller — and rank 64, which buys nothing at full
+data, costs 94 minutes rather than 79.
 
 ## Predictions, scored
 
 | Prediction | Outcome |
 |---|---|
 | LoRA 91–95% at full pool | 93.6% ✓ |
-| overlaps roberta rather than clearly beating it | not significant ✗/✓ |
+| overlaps roberta rather than clearly beating it | p = 0.12 ✓ |
 | fine-tuning fixes formatting within dozens of examples | takes thousands ✗ |
 | LoRA seed noise larger than roberta's | 0.26 vs 0.23 ✗ |
 | base model on bare prompt under 10%, unparseable above 40% | 1.7%, 96.1% ✗ (right direction, wrong magnitude) |
+| *(stage 1)* full-vs-clean gap widens with rung size | narrows, 1.6 → 0.5 ✗ |
+| *(stage 7)* rank differences inside noise | +3.35 pp at 616 examples ✗ |
+| *(stage 7)* attention-only within ~1 pp of attention+MLP | −7.79 pp ✗ |
 
 ## Limitations
 
@@ -228,12 +275,17 @@ disadvantage larger, not smaller.
   where the crossover sits for a different model size or a task with
   fewer classes.
 - The comparison uses roberta-base as the encoder because deberta-v3 could
-  not be trained on this stack (`docs/04_encoder.md`). Other encoders were
+  not be trained on this stack (`docs/05_encoder.md`). Other encoders were
   not swept.
 - Epoch budgets are matched in spirit, not exactly: LoRA runs 8 epochs and
   roberta 15, each selecting its best epoch on dev. Both had plateaued.
 - Inference timings are single-item constrained scoring on a T4 and are
   indicative, not a serving benchmark.
+- **Dev predictions were never persisted.** The training loop scores dev
+  every epoch but writes only test predictions to disk, so the stage 8
+  failure taxonomy has to read test failures rather than dev ones. Saving
+  both would have cost nothing and should have been in the loop from the
+  first run.
 
 ## Artefacts
 

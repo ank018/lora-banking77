@@ -1,12 +1,14 @@
-# Stage 4 — The encoder baseline
+# Stage 5 — The encoder baseline
 
 The comparison most write-ups skip: a small, conventional classifier
 trained the old way, on exactly the data the fine-tuned LLM will get.
 
 It was planned as a supporting baseline. It took two days, produced a model
-that could not be trained at all, exposed a comparison this project had
-been making unfairly, and ended by setting the bar the whole fine-tuning
-experiment now has to clear.
+that could not be trained at all, and exposed a comparison this project had
+been making unfairly. Its purpose is to give the LoRA numbers a scale, and
+to answer one question the LoRA experiment cannot answer alone: **how much
+of fine-tuning's advantage comes from the pretrained model, and how much
+from having labelled data at all.**
 
 ## Results
 
@@ -21,7 +23,7 @@ or model selection.
 | 616 | 8 | 61.6% | **82.3%** | +20.7 | 0.39 pp |
 | 1,232 | 16 | 67.9% | **87.6%** | +19.7 | 0.33 pp |
 | 1,848 | 24 | 72.8% | **89.5%** | +16.7 | 0.38 pp |
-| 9,387 | full | 82.9% | **94.3%** | +11.4 | — |
+| 9,387 | full | 82.9% | **94.0%** | +11.1 | 0.23 pp |
 
 Both columns are scored on the same frozen 3,080-item test set. kNN is
 restricted to the same training examples at each row.
@@ -30,6 +32,8 @@ restricted to the same training examples at each row.
 point. The gap is largest in the middle of the curve and narrows at both
 ends — at 2 examples per class neither method has much to work with, and by
 9,387 both are approaching what the label noise allows.
+
+The full-pool row is a three-seed mean: 94.25 / 93.90 / 93.83.
 
 **RoBERTa matches full-pool kNN using 6.6% of the data.** 82.3% on 616
 examples against kNN's 82.9% on 9,387: delta −0.71 pp, McNemar p = 0.39,
@@ -79,12 +83,21 @@ pessimistic estimate.
 Variance shrinks as data grows, which is the sensible direction, and is
 largest where the model has least to learn from.
 
+At the full pool, three seeds: **0.23 pp** (94.25 / 93.90 / 93.83).
+LoRA on Qwen3-1.7B measured **0.26 pp** at the same rung — near-identical,
+where I had expected generation-based training on a 2B model to be noisier.
+
 **Consequence.** With three seeds the standard error of a mean is about
-0.23 pp, so differences around 1 point become detectable. The stage 6
-ablation grid is comfortably resolvable — the constraint the project was
-designed around turned out to be much looser than feared. That is worth
-stating plainly: the design was correct to measure it rather than assume
-it, and the measurement went the favourable way.
+0.15 pp, so differences around half a point become detectable at full data.
+The constraint the project was designed around turned out much looser than
+feared.
+
+One caveat carried into stage 7: this is seed noise **at the full pool**.
+At rung 8 the ablation runs measured a pooled sd of **0.79 pp**, three
+times larger, and the ablation script's footer initially quoted the
+full-pool figure at rung 8 — making its significance threshold roughly
+three times too generous. Noise is a property of a regime, not of a
+project.
 
 ## DeBERTa-v3 could not be trained on this stack
 
@@ -174,14 +187,19 @@ two epochs on this task.
 
 ## The bar this sets
 
-**94.3% from a 125M model, 33 minutes on a free T4, ~58 prompt tokens per
-prediction, no label list, no generation.**
+**94.0% ± 0.23 from a 125M model, 30 minutes on a free T4, 64 prompt tokens
+per prediction, no label list, no generation.**
 
 Qwen3-1.7B is 2.03B parameters — 16× larger — and its constrained
-evaluation costs roughly 500 ms per item against RoBERTa's few
-milliseconds. For fine-tuning it to be the right answer here, LoRA must
-clear 94.3% by a margin that survives a paired test at roughly 1-point
-resolution. Seed noise of 0.33–0.47 pp and n = 3,080 make that measurable.
+evaluation costs roughly 330 ms per item against RoBERTa's few
+milliseconds.
+
+**Outcome (stage 6):** LoRA reached 93.59% ± 0.26 at matched epoch budgets.
+The 0.40-point difference is not significant (seed-level p = 0.119;
+item-level p = 0.31–0.38 across three matched seeds). But at **154
+examples** LoRA leads by **+8.93 pp** (p ≈ 10⁻¹⁸). The encoder's role in
+this project is to locate that crossover — somewhere between 308 and 616
+examples — not to win a contest.
 
 ## Predictions, scored
 
@@ -192,14 +210,21 @@ resolution. Seed noise of 0.33–0.47 pp and n = 3,080 make that measurable.
 | curve still climbing at rung 24 | yes ✓ |
 | encoder crosses kNN between rungs 8 and 16 | no crossover; wins everywhere ✗ |
 | RoBERTa 86–89% at rung 24 | 89.5% ✗ (just above) |
-| RoBERTa 91–93% at full pool | 94.3% ✗ (above) |
+| RoBERTa 91–93% at full pool | 94.0% ✗ (above) |
 
 **One of six.** Every miss was in the same direction: the small
 conventional model is better, and more data-efficient, than predicted.
 
+The largest, though, is the first row. Predicting a model's accuracy is
+guesswork; predicting that the model would be **untrainable on the target
+stack** was not something any amount of care would have produced. That
+failure mode — a framework default silently destroying a model — is not on
+the list of things a plan anticipates.
+
 ## Limitations
 
-- The full-pool row is currently a **single seed**; two more are running.
+- The full-pool row is a three-seed mean (94.25 / 93.90 / 93.83, sd 0.23).
+  Every other row is also three seeds; the kNN column is deterministic.
 - Hyperparameters (lr 5e-5, 30 epochs, batch 16, max_len 64) were fixed
   before the first run and never tuned per rung. Tuning per rung would
   confound "more data helps" with "this rung got better settings".
